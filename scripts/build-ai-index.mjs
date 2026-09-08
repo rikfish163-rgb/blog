@@ -216,7 +216,6 @@ export async function buildIndex(options = {}) {
     version: 1,
     publicReady,
     mode,
-    generatedAt: new Date().toISOString(),
     ...(embeddingError ? { embeddingError } : {}),
     chunks,
   };
@@ -238,7 +237,7 @@ if (import.meta.url === invokedPath) {
     await mkdir(dirname(outputPath), { recursive: true });
     await writeFile(
       outputPath,
-      `${JSON.stringify({ version: 1, publicReady: false, mode: 'keyword', generatedAt: new Date().toISOString(), chunks: [] }, null, 2)}\n`,
+      `${JSON.stringify({ version: 1, publicReady: false, mode: 'keyword', chunks: [] }, null, 2)}\n`,
       'utf8',
     );
     console.warn(`AI index unavailable; wrote keyword fallback: ${error instanceof Error ? error.message : String(error)}`);
