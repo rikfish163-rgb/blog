@@ -3,5 +3,3 @@ allowBuilds:
   esbuild: true
 
 nodeLinker: hoisted
-
-storeDir: /home/hetaisheng/.local/share/pnpm/store/v11

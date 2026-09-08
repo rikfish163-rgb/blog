@@ -12,19 +12,25 @@
 用法：
   python3 scripts/shoot.py <url> <输出图> [--dark] [--reduced] [--click] [--full] [--mobile]
 """
+import os
+import shutil
 import sys
 import json
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-CHROME = "/home/hetaisheng/.local/bin/google-chrome"
+CHROME = os.environ.get("CHROME_BIN") or shutil.which("google-chrome") or shutil.which("chromium")
 
 
 def main() -> int:
     if len(sys.argv) < 3:
         print(__doc__)
         return 2
+    if not CHROME:
+        print("Chrome not found; set CHROME_BIN to the browser executable.", file=sys.stderr)
+        return 2
+
 
     url, out = sys.argv[1], sys.argv[2]
     flags = set(sys.argv[3:])
