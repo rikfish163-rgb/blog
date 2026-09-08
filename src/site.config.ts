@@ -183,9 +183,9 @@ export const PROFILE = {
  */
 export const GISCUS = {
   repo: 'rikfish163-rgb/blog',
-  repoId: '',
+  repoId: 'R_kgDOUR66sw',
   category: 'Announcements',
-  categoryId: '',
+  categoryId: 'DIC_kwDOUR66s84DFIOX',
 } as const;
 
 /** 首页策展区展示几篇精选 */
