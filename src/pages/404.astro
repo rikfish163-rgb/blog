@@ -1,0 +1,133 @@
+---
+/**
+ * 404。
+ *
+ * 静态站只有一个 /404.html 服务所有路径，所以它不能属于任何一种语言。
+ * 做法：两种语言的文案同时给出（中文在上，因为主要读者在国内），
+ * 并用一小段脚本按 navigator.language 隐藏不相关的那份。
+ * 无 JS 时两份都显示 —— 略啰嗦，但比只给一种语言更有用。
+ *
+ * 不复用 BaseLayout：那个组件要求传 lang，而这里没有确定的 lang。
+ */
+import '../styles/global.css';
+import { SITE_NAME, WORDMARK } from '../site.config';
+---
+
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>404 · {SITE_NAME}</title>
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/fonts/base.css" />
+    <link rel="stylesheet" href="/fonts/zh.css" />
+
+    <script is:inline>
+      (function () {
+        try {
+          var saved = localStorage.getItem('theme');
+          var t =
+            saved === 'light' || saved === 'dark'
+              ? saved
+              : window.matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light';
+          document.documentElement.dataset.theme = t;
+        } catch (e) {
+          /* 隐私模式：保持默认亮色 */
+        }
+        // 按浏览器语言只留一份文案
+        var zh = (navigator.language || 'zh').toLowerCase().indexOf('zh') === 0;
+        document.documentElement.classList.add(zh ? 'only-zh' : 'only-en');
+      })();
+    </script>
+  </head>
+
+  <body>
+    <main id="main" class="wrap">
+      <span class="mark" aria-hidden="true">{WORDMARK}</span>
+
+      <!-- 一张被撕掉的纸的边缘。比大写的 404 更贴合笔记本的隐喻 -->
+      <svg class="tear" viewBox="0 0 240 18" aria-hidden="true">
+        <path
+          d="M0 4 L12 9 L24 3 L36 10 L48 4 L60 11 L72 5 L84 12 L96 6 L108 13
+             L120 5 L132 11 L144 4 L156 10 L168 3 L180 9 L192 4 L204 11 L216 5 L228 10 L240 4"
+        />
+      </svg>
+
+      <div class="zh">
+        <h1>这一页是空白的</h1>
+        <p>你要找的东西不在这本笔记本里。</p>
+        <p class="links"><a href="/zh/">回到第一页</a></p>
+      </div>
+
+      <div class="en" lang="en">
+        <h1>This page is blank</h1>
+        <p>What you're looking for isn't in this notebook.</p>
+        <p class="links"><a href="/en/">Back to page one</a></p>
+      </div>
+    </main>
+  </body>
+</html>
+
+<style>
+  .wrap {
+    max-width: var(--measure);
+    margin-inline: auto;
+    padding: var(--s6) var(--s1);
+  }
+
+  .mark {
+    font-family: var(--font-wordmark);
+    font-size: 2.5rem;
+    line-height: 1;
+    color: var(--pencil);
+  }
+
+  .tear {
+    width: 15rem;
+    height: 1.1rem;
+    margin-block: var(--s2);
+  }
+
+  .tear path {
+    fill: none;
+    stroke: var(--pencil-light);
+    stroke-width: 1.2;
+    stroke-linejoin: round;
+  }
+
+  h1 {
+    font-size: var(--fs-h1);
+  }
+
+  p {
+    margin-top: var(--s1);
+    color: var(--ink-faded);
+  }
+
+  .links {
+    margin-top: var(--s2);
+  }
+
+  .en {
+    margin-top: var(--s3);
+    padding-top: var(--s2);
+    border-top: 1px solid var(--rule);
+  }
+
+  /* 脚本判定语言后只留一份。两个类都没有时（无 JS）双语都显示。 */
+  :global(html.only-zh) .en,
+  :global(html.only-en) .zh {
+    display: none;
+  }
+
+  /* 只剩英文那份时，不需要那条分隔线 */
+  :global(html.only-en) .en {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+  }
+</style>

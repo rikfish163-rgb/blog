@@ -1,0 +1,23 @@
+public/fonts/
+public/katex/
+dist/
+node_modules/
+.astro/
+.data/
+.wrangler/
+.env
+.env.*
+!.env.example
+.DS_Store
+.playwright-cli/
+output/
+
+# Private/unapproved editorial material; production build exclusion is not
+# enough because this repository itself is public.
+src/content/draft-topics.json
+src/data/draft-topics.json
+src/content/posts/en/*.md
+src/content/posts/zh/august-three-floors-and-7gb.md
+src/content/posts/zh/robot-stuck-not-path-planning.md
+src/content/projects/danger-search-robot.zh.md
+src/content/projects/panda-reactive-il.zh.md

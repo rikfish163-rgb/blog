@@ -1,0 +1,482 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { langPaths, assertLang } from '../../lib/content';
+import { useT } from '../../i18n/ui';
+import { AUTHOR, PROFILE, SOCIAL, WORDMARK, type Locale } from '../../site.config';
+
+export function getStaticPaths() {
+  return langPaths();
+}
+
+const lang = assertLang(Astro.params.lang);
+const locale = lang as Locale;
+const t = useT(locale);
+
+/**
+ * 每个区块都判空后再渲染。
+ * 用户还没提供的信息（联系方式、时间段等）现在是空字符串，
+ * 那些区块会整块跳过，而不是渲染出一个空标题 —— 空标题比没有更难看。
+ */
+const has = (v: string | undefined | null) => typeof v === 'string' && v.trim().length > 0;
+
+const showUnreviewed = import.meta.env.DEV;
+const contact = Object.entries(PROFILE.contact).filter(
+  ([key, value]) => has(value) && (showUnreviewed || key === 'github'),
+);
+const publicIntro =
+  lang === 'zh'
+    ? 'HUST 学生，关注具身智能、机器人自主探索与 LLM Agent。'
+    : 'A HUST student interested in embodied AI, autonomous robot exploration, and LLM agents.';
+const reviewLabel = lang === 'zh' ? '待审核，仅开发预览' : 'Pending review · development preview only';
+
+const L = {
+  education: lang === 'zh' ? '教育' : 'Education',
+  projects: lang === 'zh' ? '做过的东西' : 'Work',
+  organizations: lang === 'zh' ? '团队与组织' : 'Teams',
+  honors: lang === 'zh' ? '荣誉' : 'Honors',
+  competitions: lang === 'zh' ? '竞赛记录' : 'Competition log',
+  skills: lang === 'zh' ? '会用的工具' : 'Tools',
+  interests: lang === 'zh' ? '在实验室之外' : 'Beyond the lab',
+  looking: lang === 'zh' ? '在找什么' : 'Looking for',
+  contact: lang === 'zh' ? '联系' : 'Contact',
+  publicResume: lang === 'zh' ? '公开履历' : 'PUBLIC NOTES',
+  updated: lang === 'zh' ? '更新于' : 'UPDATED',
+  national: lang === 'zh' ? '国奖' : 'NATIONAL',
+};
+
+const contactLabel: Record<string, string> = {
+  email: lang === 'zh' ? '邮箱' : 'Email',
+  github: 'GitHub',
+  wechat: lang === 'zh' ? '微信' : 'WeChat',
+  other: lang === 'zh' ? '其他' : 'Other',
+};
+---
+
+<BaseLayout lang={lang} title={t('nav.about')} current="about">
+  <main id="main" class="page">
+    <div class="sheet sheet--ruled">
+      <aside class="margin">
+        <span class="sign" aria-hidden="true">{WORDMARK}</span>
+        <span class="margin-label mono">{L.publicResume}</span>
+        {showUnreviewed && <span class="margin-date mono">{L.updated}<br />{PROFILE.resumeAsOf}</span>}
+      </aside>
+
+      <div class="content">
+        <header class="head" data-reveal>
+          <h1>{showUnreviewed ? AUTHOR.name[locale] : 'Hetaisheng'}</h1>
+          <p class="sub mono">
+            {showUnreviewed ? `${AUTHOR.affiliation[locale]} · ${AUTHOR.location[locale]}` : 'HUST'}
+          </p>
+          {showUnreviewed && <p class="review-note mono">{reviewLabel}</p>}
+          <p class="intro">{showUnreviewed ? PROFILE.intro[locale] : publicIntro}</p>
+        </header>
+
+        {
+          showUnreviewed && PROFILE.projects.length > 0 && (
+            <section class="block" data-reveal>
+              <h2>{L.projects}</h2>
+              {PROFILE.projects.map((p) => (
+                <div class="item">
+                  <p class="item-head">
+                    <span class="strong">
+                      {has(p.link) ? (
+                        <a class="project-link" href={p.link} rel="noopener">
+                          {p.name[locale]} <span aria-hidden="true">↗</span>
+                        </a>
+                      ) : p.name[locale]}
+                    </span>
+                    {has(p.period) && <span class="period mono">{p.period}</span>}
+                  </p>
+                  {has(p.role[locale]) && <p class="item-sub">{p.role[locale]}</p>}
+                  <p class="item-note">{p.summary[locale]}</p>
+                  {p.stack.length > 0 && (
+                    <ul class="stack">
+                      {p.stack.map((s) => (
+                        <li class="chip mono">{s}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ))}
+            </section>
+          )
+        }
+
+        {
+          showUnreviewed && PROFILE.honors.length > 0 && (
+            <section class="block" data-reveal>
+              <h2>{L.honors}</h2>
+              <ol class="honors">
+                {PROFILE.honors.map((honor) => (
+                  <li class:list={['honor', honor.level === 'national' && 'honor--national']}>
+                    {honor.level === 'national' && (
+                      <span class="honor-stamp" aria-label={L.national}>{L.national}</span>
+                    )}
+                    <span>{honor.title[locale]}</span>
+                    <time class="period mono" datetime={honor.date}>{honor.date}</time>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )
+        }
+
+        {
+          showUnreviewed && PROFILE.education.length > 0 && (
+            <section class="block" data-reveal>
+              <h2>{L.education}</h2>
+              {PROFILE.education.map((e) => (
+                <div class="item">
+                  <p class="item-head">
+                    <span class="strong">{e.school[locale]}</span>
+                    {has(e.period) && <span class="period mono">{e.period}</span>}
+                  </p>
+                  <p class="item-sub">{e.degree[locale]}</p>
+                  {has(e.note[locale]) && <p class="item-note">{e.note[locale]}</p>}
+                </div>
+              ))}
+            </section>
+          )
+        }
+
+        {
+          showUnreviewed && PROFILE.organizations.length > 0 && (
+            <section class="block" data-reveal>
+              <h2>{L.organizations}</h2>
+              {PROFILE.organizations.map((org) => (
+                <div class="item item--compact">
+                  <p class="item-head">
+                    <span class="strong">{org.name[locale]}</span>
+                    {has(org.period) && <span class="period mono">{org.period}</span>}
+                  </p>
+                  <p class="item-sub">{org.role[locale]}</p>
+                </div>
+              ))}
+            </section>
+          )
+        }
+
+        {
+          showUnreviewed && PROFILE.competitions.length > 0 && (
+            <section class="block" data-reveal>
+              <h2>{L.competitions}</h2>
+              <ol class="competition-log">
+                {PROFILE.competitions.map((entry) => (
+                  <li>
+                    <span>{entry.name[locale]}</span>
+                    <time class="period mono">{entry.period}</time>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )
+        }
+
+        {
+          showUnreviewed && PROFILE.skills.length > 0 && (
+            <section class="block" data-reveal>
+              <h2>{L.skills}</h2>
+              <dl class="skills">
+                {PROFILE.skills.map((g) => (
+                  <div class="skill-row">
+                    <dt>{g.group[locale]}</dt>
+                    <dd>{g.items.join(' · ')}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          )
+        }
+
+        {
+          showUnreviewed && PROFILE.interests[locale].length > 0 && (
+            <section class="block" data-reveal>
+              <h2>{L.interests}</h2>
+              <p class="interests">{PROFILE.interests[locale].join(' · ')}</p>
+            </section>
+          )
+        }
+
+        {
+          showUnreviewed && has(PROFILE.looking[locale]) && (
+            <section class="block" data-reveal>
+              <h2>{L.looking}</h2>
+              <p class="looking">{PROFILE.looking[locale]}</p>
+            </section>
+          )
+        }
+
+        <section class="block" data-reveal>
+          <h2>{L.contact}</h2>
+          <dl class="skills">
+            {
+              contact.map(([k, v]) => (
+                <div class="skill-row">
+                  <dt>{contactLabel[k] ?? k}</dt>
+                  <dd>
+                    {k === 'email' ? (
+                      <a href={`mailto:${v}`}>{v}</a>
+                    ) : k === 'github' ? (
+                      <a href={SOCIAL.github} rel="me noopener">
+                        {v}
+                      </a>
+                    ) : (
+                      v
+                    )}
+                  </dd>
+                </div>
+              ))
+            }
+          </dl>
+        </section>
+      </div>
+    </div>
+  </main>
+</BaseLayout>
+
+<style>
+  .sign {
+    font-family: var(--font-wordmark);
+    font-size: 1.6rem;
+    line-height: 1;
+    color: var(--pencil);
+  }
+
+  .margin-label,
+  .margin-date {
+    display: block;
+    color: var(--pencil);
+    font-size: 0.58rem;
+    letter-spacing: 0.08em;
+    line-height: 1.45;
+    writing-mode: vertical-rl;
+  }
+
+  .margin-label {
+    margin-top: 1.1rem;
+  }
+
+  .margin-date {
+    position: sticky;
+    top: 7rem;
+    margin-top: 1.5rem;
+  }
+
+  .head {
+    padding-block: var(--s1) var(--s2);
+  }
+
+  .head h1 {
+    font-size: var(--fs-display);
+  }
+
+  .sub {
+    margin-top: 0.35rem;
+    font-size: var(--fs-sm);
+    color: var(--pencil);
+  }
+
+  .review-note {
+    display: inline-block;
+    margin-top: 0.55rem;
+    padding: 0.12rem 0.35rem;
+    border: 1px solid var(--stamp);
+    color: var(--stamp);
+    font-size: var(--fs-xs);
+  }
+
+  .intro {
+    margin-top: var(--s1);
+    font-size: var(--fs-lg);
+    line-height: 1.6;
+    color: var(--ink-faded);
+  }
+
+  .block {
+    padding-block: var(--s1);
+  }
+
+  .block h2 {
+    font-size: var(--fs-sm);
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: var(--ls-wide);
+    color: var(--pencil);
+    font-weight: 400;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: var(--s1);
+  }
+
+  .item {
+    margin-bottom: var(--s1);
+  }
+
+  .item--compact {
+    margin-bottom: 0.7rem;
+  }
+
+  .item-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--s1);
+  }
+
+  .strong {
+    font-weight: 600;
+    color: var(--ink-strong);
+  }
+
+  .project-link {
+    text-decoration-color: transparent;
+  }
+
+  .project-link:hover {
+    text-decoration-color: currentColor;
+  }
+
+  .project-link span {
+    display: inline-block;
+    color: var(--pencil);
+    font-family: var(--font-mono);
+    font-size: 0.75em;
+    transition: transform var(--dur-fast) var(--ease-out);
+  }
+
+  .project-link:hover span {
+    transform: translate(0.12rem, -0.12rem);
+  }
+
+  .period {
+    font-size: var(--fs-xs);
+    color: var(--pencil);
+    flex: none;
+  }
+
+  .item-sub {
+    margin-top: 0.15rem;
+    font-size: var(--fs-sm);
+    color: var(--ink-faded);
+  }
+
+  .item-note {
+    margin-top: 0.3rem;
+    font-size: var(--fs-sm);
+    line-height: 1.65;
+    color: var(--ink-faded);
+  }
+
+  /* 技术栈小标签。等宽 + 极淡底，像在代码注释里列依赖 */
+  .stack {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem 0.4rem;
+    margin: 0.5rem 0 0;
+    padding: 0;
+  }
+
+  .chip {
+    font-size: var(--fs-xs);
+    color: var(--pencil);
+    padding: 0.1rem 0.4rem;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+  }
+
+  .honors,
+  .competition-log {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .honor,
+  .competition-log li {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--s1);
+    align-items: baseline;
+    padding-block: 0.38rem;
+    font-size: var(--fs-sm);
+  }
+
+  .honor--national {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  /* 全页唯一的朱砂标记：只给最高级别奖项，不把荣誉区做成红章墙。 */
+  .honor-stamp {
+    width: 2rem;
+    height: 2rem;
+    display: inline-grid;
+    place-items: center;
+    border: 1px solid var(--stamp);
+    border-radius: 50%;
+    color: var(--stamp);
+    font-size: 0.52rem;
+    font-family: var(--font-mono);
+    letter-spacing: 0.02em;
+    transform: rotate(-7deg);
+  }
+
+  .competition-log li + li {
+    border-top: 1px dotted color-mix(in srgb, var(--rule) 75%, transparent);
+  }
+
+  .skills {
+    margin: 0;
+  }
+
+  /* 定义列表左右两列。中文标签短，用固定列宽比 grid auto 更整齐 */
+  .skill-row {
+    display: grid;
+    grid-template-columns: 6rem minmax(0, 1fr);
+    gap: var(--s1);
+    padding-block: 0.3rem;
+  }
+
+  .skill-row dt {
+    font-size: var(--fs-sm);
+    color: var(--pencil);
+  }
+
+  .skill-row dd {
+    margin: 0;
+    font-size: var(--fs-sm);
+  }
+
+  .looking {
+    font-size: var(--fs-sm);
+    line-height: 1.7;
+    color: var(--ink-faded);
+  }
+
+  .interests {
+    color: var(--ink-faded);
+    font-size: var(--fs-sm);
+  }
+
+  @media (max-width: 32rem) {
+    .skill-row {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0.1rem;
+    }
+
+    .honor,
+    .competition-log li {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0.1rem;
+    }
+
+    .honor--national {
+      grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .honor--national .period {
+      grid-column: 2;
+    }
+  }
+</style>

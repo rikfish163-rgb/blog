@@ -1,0 +1,71 @@
+---
+/**
+ * 语言切换。
+ *
+ * 路由结构两种语言完全对称，所以只需把路径里的语言段替换掉，
+ * 就能停在"同一篇文章的另一种语言"而不是被扔回首页 —— 后者是双语站最恼人的体验。
+ *
+ * 若目标语言只是回退（没有真译文），加一个小标记如实告知，
+ * 而不是让人点过去才发现是原文。
+ */
+import { useT } from '../i18n/ui';
+import { otherLang, type Lang } from '../lib/posts';
+import type { Locale } from '../site.config';
+
+interface Props {
+  lang: Lang;
+  /** 当前页在目标语言下是否有真译文。列表页等无对应概念的页面不传即可 */
+  targetHasTranslation?: boolean;
+}
+
+const { lang, targetHasTranslation } = Astro.props;
+const t = useT(lang as Locale);
+const target = otherLang(lang);
+
+const onlyFallback = targetHasTranslation === false;
+// 无译文时回到目标语言的文章列表；列表会显示原文并直接链接真实语言页面。
+const translatedPath = Astro.url.pathname.replace(/^\/(zh|en)(?=\/|$)/, `/${target}`);
+const href = onlyFallback ? `/${target}/posts/` : translatedPath;
+---
+
+<a
+  class="lang-switch"
+  href={href}
+  hreflang={target === 'zh' ? 'zh-CN' : 'en'}
+  lang={target === 'zh' ? 'zh-CN' : 'en'}
+  data-astro-prefetch
+>
+  {t('lang.switch')}
+  {/* 目标语言无译文时的提示。用 title 而非可见文字，避免导航栏变拥挤 */}
+  {
+    onlyFallback && (
+      <span
+        class="mark"
+        aria-label={lang === 'zh' ? '该页暂无英文版' : 'No Chinese version yet'}
+        title={lang === 'zh' ? '该页暂无英文版，前往英文文章列表' : 'No Chinese version; go to the Chinese writing list'}
+      >*</span>
+    )
+  }
+</a>
+
+<style>
+  .lang-switch {
+    font-family: var(--font-mono);
+    font-size: var(--fs-sm);
+    color: var(--ink-faded);
+    text-decoration: none;
+    padding: 0.15rem 0.3rem;
+    border-radius: var(--radius);
+    transition: color var(--dur-fast) var(--ease);
+  }
+
+  .lang-switch:hover {
+    color: var(--ink);
+  }
+
+  .mark {
+    color: var(--stamp);
+    /* 星号紧跟文字，不占额外宽度 */
+    margin-left: 0.1em;
+  }
+</style>

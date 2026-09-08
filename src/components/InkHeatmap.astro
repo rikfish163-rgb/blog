@@ -1,0 +1,125 @@
+---
+export interface HeatmapDay {
+  date: string;
+  count: number;
+}
+
+interface Props {
+  days: readonly HeatmapDay[];
+  title?: string;
+  tableLabel?: string;
+}
+
+const { days, title = 'Writing activity', tableLabel = 'Writing activity by date' } = Astro.props;
+const cleanDays = days
+  .filter((day) => /^\d{4}-\d{2}-\d{2}$/.test(day.date) && Number.isFinite(day.count) && day.count >= 0)
+  .map((day) => ({ date: day.date, count: Math.trunc(day.count) }))
+  .sort((left, right) => left.date.localeCompare(right.date));
+const maximum = cleanDays.reduce((max, day) => Math.max(max, day.count), 0);
+const level = (count: number) => (count === 0 || maximum === 0 ? 0 : Math.min(4, Math.ceil((count / maximum) * 4)));
+const cellLabel = (day: HeatmapDay) => `${day.date}: ${day.count}`;
+---
+
+<section class="ink-heatmap" aria-labelledby="ink-heatmap-title">
+  <h3 id="ink-heatmap-title">{title}</h3>
+  <div class="heatmap-grid" role="img" aria-label={title}>
+    {cleanDays.map((day) => (
+      <span
+        class="heatmap-cell"
+        data-level={level(day.count)}
+        title={cellLabel(day)}
+        aria-label={cellLabel(day)}
+      ></span>
+    ))}
+  </div>
+
+  <table class="heatmap-table">
+    <caption>{tableLabel}</caption>
+    <thead>
+      <tr>
+        <th scope="col">Date</th>
+        <th scope="col">Count</th>
+      </tr>
+    </thead>
+    <tbody>
+      {cleanDays.map((day) => (
+        <tr>
+          <th scope="row">{day.date}</th>
+          <td>{day.count}</td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</section>
+
+<style>
+  .ink-heatmap {
+    margin-top: var(--s1);
+  }
+
+  .ink-heatmap h3 {
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    margin: 0 0 0.55rem;
+  }
+
+  .heatmap-grid {
+    display: grid;
+    gap: 0.22rem;
+    grid-template-columns: repeat(auto-fill, minmax(0.7rem, 1fr));
+    max-width: 34rem;
+  }
+
+  .heatmap-cell {
+    aspect-ratio: 1;
+    background: color-mix(in srgb, var(--rule) 76%, var(--paper));
+    border: 1px solid color-mix(in srgb, var(--rule) 80%, transparent);
+    display: block;
+    min-width: 0.65rem;
+  }
+
+  .heatmap-cell[data-level='1'] {
+    background: color-mix(in srgb, var(--stamp) 28%, var(--paper));
+  }
+
+  .heatmap-cell[data-level='2'] {
+    background: color-mix(in srgb, var(--stamp) 46%, var(--paper));
+  }
+
+  .heatmap-cell[data-level='3'] {
+    background: color-mix(in srgb, var(--stamp) 66%, var(--paper));
+  }
+
+  .heatmap-cell[data-level='4'] {
+    background: var(--stamp);
+  }
+
+  .heatmap-table {
+    border-collapse: collapse;
+    font-size: var(--fs-xs);
+    margin-top: var(--s1);
+    width: 100%;
+  }
+
+  .heatmap-table caption {
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    height: 1px;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
+
+  .heatmap-table th,
+  .heatmap-table td {
+    border-bottom: 1px solid var(--rule);
+    padding: 0.3rem 0.45rem;
+    text-align: left;
+  }
+
+  .heatmap-table td {
+    font-family: var(--font-mono);
+    text-align: right;
+  }
+</style>

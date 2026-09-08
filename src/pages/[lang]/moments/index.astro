@@ -1,0 +1,188 @@
+---
+import { render } from 'astro:content';
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { assertLang, langPaths } from '../../../lib/content';
+import { momentsFor } from '../../../lib/site-content';
+import { isoDate, readableDate } from '../../../lib/format';
+
+export function getStaticPaths() {
+  return langPaths();
+}
+
+const lang = assertLang(Astro.params.lang);
+const entries = await momentsFor(lang);
+const moments = await Promise.all(
+  entries.map(async (entry) => ({
+    entry,
+    Content: (await render(entry)).Content,
+  })),
+);
+const title = lang === 'zh' ? '短记' : 'Moments';
+const intro =
+  lang === 'zh'
+    ? '一些尚未长成文章的现场笔记。'
+    : 'Field notes that have not grown into essays yet.';
+const empty = lang === 'zh' ? '还没有公开短记。' : 'No public moments yet.';
+---
+
+<BaseLayout lang={lang} title={title}>
+  <main id="main" class="page">
+    <div class="sheet sheet--ruled">
+      <aside class="margin" aria-label={lang === 'zh' ? '短记数量' : 'Moment count'}>
+        <p class="count mono">{String(moments.length).padStart(2, '0')}</p>
+        <p class="mono">{lang === 'zh' ? '条' : 'notes'}</p>
+      </aside>
+
+      <div class="content paper-surface">
+        <header class="heading">
+          <p class="eyebrow">{lang === 'zh' ? '生活切片' : 'LIFE NOTES'}</p>
+          <h1>{title}</h1>
+          <p class="intro">{intro}</p>
+        </header>
+
+        {
+          moments.length === 0 ? (
+            <p class="empty" role="status">{empty}</p>
+          ) : (
+            <div class="moment-list">
+              {moments.map(({ entry, Content }, index) => {
+                const data = entry.data;
+                return (
+                  <article class="moment" data-reveal>
+                    <header class="moment-heading">
+                      <time class="seal" datetime={isoDate(data.pubDate)}>{readableDate(data.pubDate, lang)}</time>
+                      {data.tags.length > 0 && (
+                        <ul class="tags" aria-label={lang === 'zh' ? '标签' : 'Tags'}>
+                          {data.tags.map((tag) => <li>{tag}</li>)}
+                        </ul>
+                      )}
+                    </header>
+                    <div class="prose"><Content /></div>
+                    {data.images.length > 0 && (
+                      <div class="images" aria-label={lang === 'zh' ? '配图' : 'Images'}>
+                        {data.images.map((image, imageIndex) => (
+                          <figure>
+                            <img src={image.src} alt={image.alt} loading={index === 0 && imageIndex === 0 ? 'eager' : 'lazy'} />
+                            {image.caption && <figcaption>{image.caption}</figcaption>}
+                          </figure>
+                        ))}
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          )
+        }
+      </div>
+    </div>
+  </main>
+</BaseLayout>
+
+<style>
+  .content {
+    padding: var(--s2);
+  }
+
+  .heading {
+    padding-bottom: var(--s2);
+    border-bottom: 1px solid var(--rule);
+  }
+
+  h1 {
+    margin-block: 0.35rem 0;
+    font-size: var(--fs-h1);
+  }
+
+  .intro,
+  .empty {
+    color: var(--ink-faded);
+  }
+
+  .count {
+    color: var(--stamp);
+    font-size: var(--fs-lg);
+  }
+
+  .moment-list {
+    display: grid;
+  }
+
+  .moment {
+    padding-block: var(--s2);
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .moment:last-child {
+    border-bottom: 0;
+  }
+
+  .moment-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.7rem var(--s1);
+  }
+
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.65rem;
+    padding: 0;
+    margin: 0;
+    list-style: none;
+    color: var(--pencil);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+  }
+
+  .tags li::before {
+    content: '#';
+    color: var(--stamp);
+    margin-right: 0.15rem;
+  }
+
+  .prose {
+    max-width: 64ch;
+    margin-top: var(--s1);
+  }
+
+  .prose :global(p),
+  .prose :global(ul),
+  .prose :global(ol),
+  .prose :global(blockquote),
+  .prose :global(pre) {
+    margin-block: 0.9em;
+  }
+
+  .images {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    gap: var(--s1);
+    margin-top: var(--s1);
+  }
+
+  figure {
+    margin: 0;
+  }
+
+  figure img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    border: 1px solid var(--rule);
+  }
+
+  figcaption {
+    margin-top: 0.35rem;
+    color: var(--pencil);
+    font-size: var(--fs-xs);
+  }
+
+  @media (max-width: 42rem) {
+    .content {
+      padding: var(--s1);
+    }
+  }
+</style>

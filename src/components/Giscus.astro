@@ -1,0 +1,140 @@
+---
+import { GISCUS, type Locale } from '../site.config';
+
+interface Props {
+  lang: Locale;
+  heading?: string;
+}
+
+const { lang, heading = lang === 'zh' ? '评论' : 'Comments' } = Astro.props;
+const configured = [GISCUS.repo, GISCUS.repoId, GISCUS.category, GISCUS.categoryId].every(
+  (value) => value.trim().length > 0,
+);
+const headingId = 'giscus-heading';
+const status = import.meta.env.DEV
+  ? lang === 'zh'
+    ? '待创建公开仓库并回填 Giscus ID。'
+    : 'Create a public repository and fill in the Giscus IDs to enable comments.'
+  : lang === 'zh'
+    ? '评论暂未开放。'
+    : 'Comments are not open yet.';
+const loading = lang === 'zh' ? '评论区加载中…' : 'Comments are loading…';
+const giscusLang = lang === 'zh' ? 'zh-CN' : 'en';
+---
+
+<section class="giscus-section" data-giscus-panel aria-labelledby={headingId}>
+  <h2 id={headingId}>{heading}</h2>
+  {
+    configured ? (
+      <div
+        class="giscus"
+        data-giscus-host
+        data-giscus-configured="true"
+        data-repo={GISCUS.repo}
+        data-repo-id={GISCUS.repoId}
+        data-category={GISCUS.category}
+        data-category-id={GISCUS.categoryId}
+        data-lang={giscusLang}
+      >
+        <p class="giscus-fallback" data-giscus-fallback role="status">{loading}</p>
+      </div>
+    ) : (
+      <p class="giscus-status" role="status">{status}</p>
+    )
+  }
+</section>
+
+<script>
+  type GiscusTheme = 'light' | 'dark';
+  type GiscusWindow = Window & { __giscusLifecycleBound?: boolean };
+
+  const CLIENT_URL = 'https://giscus.app/client.js';
+  const GISCUS_ORIGIN = 'https://giscus.app';
+  const HOST_SELECTOR = '[data-giscus-host][data-giscus-configured="true"]';
+  const lifecycleWindow = window as GiscusWindow;
+
+  function currentTheme(): GiscusTheme {
+    return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+  }
+
+  function updateTheme(host: HTMLElement, theme: GiscusTheme): void {
+    const client = host.querySelector<HTMLScriptElement>('script[data-giscus-client]');
+    if (client) client.dataset.theme = theme;
+
+    const frame = host.querySelector<HTMLIFrameElement>('iframe.giscus-frame');
+    frame?.contentWindow?.postMessage({ giscus: { setConfig: { theme } } }, GISCUS_ORIGIN);
+  }
+
+  function syncTheme(): void {
+    const theme = currentTheme();
+    document.querySelectorAll<HTMLElement>(HOST_SELECTOR).forEach((host) => updateTheme(host, theme));
+  }
+
+  function mount(): void {
+    const theme = currentTheme();
+
+    document.querySelectorAll<HTMLElement>(HOST_SELECTOR).forEach((host) => {
+      const repo = host.dataset.repo;
+      const repoId = host.dataset.repoId;
+      const category = host.dataset.category;
+      const categoryId = host.dataset.categoryId;
+      const lang = host.dataset.lang;
+      if (!repo || !repoId || !category || !categoryId || !lang) return;
+
+      updateTheme(host, theme);
+      if (host.dataset.giscusLoaded === 'true') return;
+
+      const client = document.createElement('script');
+      client.dataset.giscusClient = 'true';
+      client.dataset.repo = repo;
+      client.dataset.repoId = repoId;
+      client.dataset.category = category;
+      client.dataset.categoryId = categoryId;
+      client.dataset.mapping = 'pathname';
+      client.dataset.strict = '1';
+      client.dataset.reactionsEnabled = '1';
+      client.dataset.emitMetadata = '0';
+      client.dataset.inputPosition = 'top';
+      client.dataset.loading = 'lazy';
+      client.dataset.theme = theme;
+      client.dataset.lang = lang;
+      client.src = CLIENT_URL;
+      client.async = true;
+      client.crossOrigin = 'anonymous';
+
+      host.dataset.giscusLoaded = 'true';
+      host.append(client);
+    });
+  }
+
+  if (!lifecycleWindow.__giscusLifecycleBound) {
+    lifecycleWindow.__giscusLifecycleBound = true;
+    mount();
+    document.addEventListener('astro:page-load', mount);
+    document.addEventListener('blog:theme-change', syncTheme);
+  }
+</script>
+
+<style>
+  .giscus-section {
+    margin-top: var(--s4);
+    padding-top: var(--s2);
+    border-top: 1px solid var(--rule);
+  }
+
+  h2 {
+    margin: 0 0 var(--s1);
+    font-size: var(--fs-h2);
+  }
+
+  .giscus-status,
+  .giscus-fallback {
+    margin: 0;
+    color: var(--ink-faded);
+    font-size: var(--fs-sm);
+  }
+
+  .giscus {
+    min-height: 4rem;
+  }
+</style>

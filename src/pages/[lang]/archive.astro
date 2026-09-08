@@ -1,0 +1,113 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { langPaths, assertLang, postsFor } from '../../lib/content';
+import { useT } from '../../i18n/ui';
+import { groupByYear } from '../../lib/posts';
+import { sealDate, isoDate } from '../../lib/format';
+import type { Locale } from '../../site.config';
+
+export function getStaticPaths() {
+  return langPaths();
+}
+
+const lang = assertLang(Astro.params.lang);
+const t = useT(lang as Locale);
+const posts = await postsFor(lang);
+
+// 归档页要的是密度和可扫读性，所以只留标题 + 日期，不带描述
+const years = groupByYear(posts).map(([year, items]) => ({
+  year,
+  items: items.map((p) => ({
+    slug: p.slug,
+    title: p.entry.data.title,
+    seal: sealDate(p.entry.data.pubDate),
+    iso: isoDate(p.entry.data.pubDate),
+  })),
+}));
+---
+
+<BaseLayout lang={lang} title={t('nav.archive')} current="archive">
+  <main id="main" class="page">
+    <div class="sheet">
+      <aside class="margin">
+        <p class="count mono">{t('archive.count', { n: posts.length })}</p>
+      </aside>
+
+      <div class="content">
+        <h1 class="title">{t('nav.archive')}</h1>
+
+        {
+          years.length === 0 ? (
+            <p class="empty">{t('home.empty')}</p>
+          ) : (
+            years.map((g) => (
+              <section class="year" data-reveal>
+                {/* 年份用等宽大字，像笔记本上分册的标记 */}
+                <h2 class="year-label mono">{g.year}</h2>
+                <ul>
+                  {g.items.map((it) => (
+                    <li>
+                      <a href={`/${lang}/posts/${it.slug}/`}>{it.title}</a>
+                      <time class="date mono" datetime={it.iso}>
+                        {it.seal}
+                      </time>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))
+          )
+        }
+      </div>
+    </div>
+  </main>
+</BaseLayout>
+
+<style>
+  .title {
+    font-size: var(--fs-h1);
+    padding-block: var(--s1) var(--s2);
+  }
+
+  .count,
+  .empty {
+    color: var(--pencil);
+  }
+
+  .year {
+    margin-bottom: var(--s2);
+  }
+
+  .year-label {
+    font-size: var(--fs-h3);
+    color: var(--pencil);
+    font-weight: 400;
+    letter-spacing: var(--ls-wide);
+    padding-bottom: 0.35rem;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  li {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--s1);
+    padding-block: 0.45rem;
+  }
+
+  li a {
+    color: var(--ink);
+  }
+
+  .date {
+    font-size: var(--fs-sm);
+    color: var(--pencil);
+    flex: none;
+  }
+</style>

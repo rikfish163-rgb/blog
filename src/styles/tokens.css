@@ -1,0 +1,199 @@
+/**
+ * 设计 token。
+ *
+ * 主印象：蓝黑墨水写在方格纸上。红色只作印章，用量极少。
+ * 刻意避开 AI 生成设计最常见的那套（米色纸 #F4F1EA + 高对比衬线 + 陶土色强调）。
+ */
+
+:root {
+  /* ── 纸与墨 ─────────────────────────────────────────── */
+  --paper: #fbf9f3;
+  --paper-raised: #fffefa; /* 卡片/正文列，比纸底再亮一点，用来压住背后的渐变 */
+  /* 方格线要弱到"察觉得到但注意不到"。
+     实测 #d8e0e8 这一档在 19px 间距下会变成主视觉，整页像坐标纸壁纸，
+     文字反而退居其次。降到接近纸色，只保留纹理暗示。 */
+  --grid: #eeeae0;
+  --grid-major: #e6e1d5; /* 每 5 格一条，比细线略深一点点即可 */
+  --rule: #ddd7c9; /* 真正需要被看见的分隔线（表格、卡片边） */
+
+  --ink: #1f2a37; /* 正文。钢笔蓝黑，不是纯黑 */
+  --ink-strong: #131b25; /* 标题 */
+  --ink-faded: #5a6875; /* 次要信息 */
+  --pencil: #8a9ba8; /* 页边批注、元信息 */
+  --pencil-light: #b4c0ca; /* 分隔线、空态 */
+
+  --stamp: #c1362f; /* 朱砂印章红。极少量：日期印、精选标记 */
+  --stamp-soft: rgba(193, 54, 47, 0.1);
+
+  /* ── 墨水渐变层 ──────────────────────────────────────
+     三块柔和 radial-gradient 色块，只做 transform 动画。
+     刻意不用 @property 动画色标（每帧全屏重绘），也不用 filter: blur()
+     （大面积模糊在低端 GPU 上同样昂贵）。 */
+  /* “流动增强”经首页视觉检查点选为生产默认。仍只移动合成图层，
+     不增加 Canvas 常驻动画或大面积 blur。 */
+  --ink-blob-1: rgba(74, 111, 154, 0.24);
+  --ink-blob-2: rgba(100, 137, 172, 0.2);
+  --ink-blob-3: rgba(148, 126, 116, 0.15);
+  --grain-opacity: 0.035;
+  --ink-backdrop-opacity: 1;
+  --ink-blob-size: 104vmax;
+  --ink-motion-scale: 1.28;
+
+  /* 点击涟漪的墨色。canvas 需要真实颜色字符串，拿不到 CSS 颜色函数，
+     所以单独给一个空格分隔的 RGB，JS 读出来自己拼 rgba()。 */
+  --ripple-rgb: 31 42 55;
+
+  /* ── 字体 ───────────────────────────────────────────
+     正文字体按语言分载：/zh 只载文楷，/en 只载 iA Writer。
+     见 scripts/setup-fonts.mjs 与 BaseLayout 里的条件 <link>。 */
+  --font-zh: 'LXGW WenKai Screen', 'Songti SC', serif;
+  --font-en: 'iA Writer Quattro', ui-serif, Georgia, serif;
+  --font-standard: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC',
+    'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --font-wordmark: 'Wordmark Brush', var(--font-zh);
+
+  /* html[lang] 决定正文用哪套；默认给中文 */
+  --font-body: var(--font-zh);
+
+  /* ── 字号 ───────────────────────────────────────────
+     正文 17px 起。中文楷体在小字号下笔画会糊，比无衬线需要更大的下限。 */
+  --fs-xs: 0.75rem; /* 12px 页边标注 */
+  --fs-sm: 0.8125rem; /* 13px 元信息 */
+  --fs-base: 1.0625rem; /* 17px 正文 */
+  --fs-lg: 1.25rem; /* 20px 引导语 */
+  --fs-h3: 1.375rem;
+  --fs-h2: 1.75rem;
+  --fs-h1: 2rem;
+  --fs-display: 2.75rem; /* 文章大标题 */
+  --fs-wordmark: 4rem; /* 64px 毛笔站名 */
+
+  --lh-tight: 1.3;
+  --lh-heading: 1.45;
+  --lh-body: 1.9; /* 中文长文需要比英文更松的行距 */
+
+  /* 中文标题要收紧字距，默认字间距在大字号下会显得散 */
+  --ls-heading: -0.01em;
+  --ls-wide: 0.08em; /* 小号全大写标签用 */
+
+  /* ── 尺寸 ───────────────────────────────────────────
+     方格 5mm ≈ 18.9px，取整 19px 让线条落在整像素上，避免半像素虚化。 */
+  --grid-size: 19px;
+  --measure: 40rem; /* 正文列宽 640px */
+  /* 装订线区宽度。
+     最初定的 2rem(32px) 完全不够用：日期印章 "2026.08.14" 就要约 78px，
+     中文批注「还剩 4 分钟」在 32px 下会一个字一行。真实的实验记录本页边
+     也是 20-25mm 而不是 8mm。6.5rem = 104px，刚好让这几行都单行放下。 */
+  --gutter: 6.5rem;
+  --page-max: 72rem;
+
+  /* ── 节奏 ───────────────────────────────────────────
+     间距全部按 grid-size 的倍数取，让元素落在方格线上。 */
+  --s1: var(--grid-size);
+  --s2: calc(var(--grid-size) * 2);
+  --s3: calc(var(--grid-size) * 3);
+  --s4: calc(var(--grid-size) * 4);
+  --s6: calc(var(--grid-size) * 6);
+  --s8: calc(var(--grid-size) * 8);
+
+  --radius: 2px; /* 纸不该有大圆角 */
+  --radius-card: 3px;
+
+  /* ── 动效 ───────────────────────────────────────────
+     全部在 prefers-reduced-motion 下被覆盖为 0，见 motion.css。 */
+  --dur-fast: 140ms;
+  --dur: 240ms;
+  --dur-slow: 600ms;
+  --dur-drift: 30s; /* 视觉检查点选定的流动增强节奏 */
+  --ease: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --shadow-raised: 0 1px 2px rgba(31, 42, 55, 0.05), 0 2px 8px rgba(31, 42, 55, 0.04);
+  --shadow-hover: 0 2px 4px rgba(31, 42, 55, 0.07), 0 8px 20px rgba(31, 42, 55, 0.07);
+  color-scheme: light;
+}
+
+/* 用户主动选择减少动效时，所有以 token 驱动的过渡也立即停止。 */
+:root[data-motion='reduced'] {
+  --dur-fast: 0ms;
+  --dur: 0ms;
+  --dur-slow: 0ms;
+  --dur-drift: 0ms;
+  --ink-motion-scale: 0;
+}
+
+/* ── 暗色 ───────────────────────────────────────────────
+   不是把亮色翻转，而是另挑一套。整体意象从「纸」换成「黑板/夜里的稿纸」：
+   墨色反转成浅色，方格线几乎隐去，印章红提亮以维持对比度。 */
+:root[data-theme='dark'] {
+  --paper: #14161a;
+  --paper-raised: #1b1e24;
+  --grid: #1c1f25;
+  --grid-major: #212530;
+  --rule: #2b313a;
+
+  --ink: #e8e6e1;
+  --ink-strong: #f5f3ee;
+  --ink-faded: #9aa4b0;
+  --pencil: #6b7580;
+  --pencil-light: #4a525c;
+
+  --stamp: #e05a50;
+  --stamp-soft: rgba(224, 90, 80, 0.14);
+
+  --ink-blob-1: rgba(70, 100, 140, 0.2);
+  --ink-blob-2: rgba(90, 110, 150, 0.16);
+  --ink-blob-3: rgba(130, 110, 100, 0.12);
+  /* 暗底上颗粒要更弱，否则看起来像噪点而不是纸纹 */
+  --grain-opacity: 0.022;
+
+  /* 暗色下涟漪要用浅墨，否则在深底上完全看不见 */
+  --ripple-rgb: 232 230 225;
+
+  --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.25);
+  --shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.35), 0 8px 20px rgba(0, 0, 0, 0.3);
+
+  color-scheme: dark;
+}
+
+/* 三档仅用于开发期对照；生产默认就是 fluid。 */
+:root[data-visual-preview='enabled'][data-visual='balanced'] {
+  --ink-blob-1: rgba(90, 122, 160, 0.16);
+  --ink-blob-2: rgba(120, 148, 176, 0.13);
+  --ink-blob-3: rgba(160, 140, 130, 0.1);
+  --ink-blob-size: 90vmax;
+  --ink-motion-scale: 1;
+  --dur-drift: 38s;
+}
+
+:root[data-visual-preview='enabled'][data-visual='quiet'] {
+  --ink-backdrop-opacity: 0.46;
+  --ink-blob-size: 82vmax;
+  --ink-motion-scale: 0.55;
+  --dur-drift: 52s;
+}
+
+:root[data-theme='dark'] {
+  --ink-blob-1: rgba(70, 105, 152, 0.28);
+  --ink-blob-2: rgba(86, 113, 158, 0.23);
+  --ink-blob-3: rgba(135, 109, 100, 0.17);
+}
+
+:root[data-theme='dark'][data-visual-preview='enabled'][data-visual='balanced'] {
+  --ink-blob-1: rgba(70, 100, 140, 0.2);
+  --ink-blob-2: rgba(90, 110, 150, 0.16);
+  --ink-blob-3: rgba(130, 110, 100, 0.12);
+}
+
+/* 英文页面换正文字体。iA Writer Quattro 由等宽派生，
+   与方格本隐喻同源，也避开 Inter 那个默认。 */
+:root[lang='en'] {
+  --font-body: var(--font-en);
+  --lh-body: 1.7; /* 拉丁字母不需要中文那么松 */
+}
+
+/* 标准字体使用操作系统已有的无衬线字形，不引入额外字体资源。 */
+:root[data-font='standard'] {
+  --font-body: var(--font-standard);
+  --lh-body: 1.7;
+}

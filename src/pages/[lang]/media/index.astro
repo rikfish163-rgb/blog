@@ -1,0 +1,299 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { assertLang, langPaths } from '../../../lib/content';
+import { mediaFor } from '../../../lib/site-content';
+import type { Lang } from '../../../lib/posts';
+
+export function getStaticPaths() {
+  return langPaths();
+}
+
+const lang = assertLang(Astro.params.lang);
+const media = await mediaFor(lang);
+const title = lang === 'zh' ? '书影音' : 'Media';
+const intro =
+  lang === 'zh'
+    ? '正在读、正在看、正在听，以及还没开始的。'
+    : 'Reading, watching, listening, and what has not started yet.';
+const empty = lang === 'zh' ? '还没有公开记录。' : 'No public media notes yet.';
+const filterEmpty = lang === 'zh' ? '没有符合筛选条件的记录。' : 'No records match these filters.';
+const onlyLabel = (entryLang: Lang) => {
+  if (entryLang === 'zh') return lang === 'zh' ? '仅中文' : 'Chinese only';
+  return lang === 'zh' ? '仅英文' : 'English only';
+};
+const typeLabel: Record<string, string> = {
+  book: lang === 'zh' ? '书' : 'Book',
+  film: lang === 'zh' ? '电影' : 'Film',
+  music: lang === 'zh' ? '音乐' : 'Music',
+};
+const statusLabel: Record<string, string> = {
+  planned: lang === 'zh' ? '想看' : 'Planned',
+  current: lang === 'zh' ? '进行中' : 'Current',
+  finished: lang === 'zh' ? '完成' : 'Finished',
+};
+---
+
+<BaseLayout lang={lang} title={title}>
+  <main id="main" class="page">
+    <div class="sheet sheet--ruled">
+      <aside class="margin" aria-label={lang === 'zh' ? '书影音数量' : 'Media count'}>
+        <p class="count mono">{String(media.length).padStart(2, '0')}</p>
+        <p class="mono">{lang === 'zh' ? '条' : 'items'}</p>
+      </aside>
+
+      <div class="content paper-surface" data-media-root>
+        <header class="heading">
+          <p class="eyebrow">{lang === 'zh' ? '输入与回声' : 'INPUTS & ECHOES'}</p>
+          <h1>{title}</h1>
+          <p class="intro">{intro}</p>
+        </header>
+
+        <div class="filters" aria-label={lang === 'zh' ? '筛选书影音' : 'Filter media'}>
+          <label>
+            <span>{lang === 'zh' ? '类型' : 'Type'}</span>
+            <select data-filter-type>
+              <option value="all">{lang === 'zh' ? '全部' : 'All'}</option>
+              <option value="book">{typeLabel.book}</option>
+              <option value="film">{typeLabel.film}</option>
+              <option value="music">{typeLabel.music}</option>
+            </select>
+          </label>
+          <label>
+            <span>{lang === 'zh' ? '状态' : 'Status'}</span>
+            <select data-filter-status>
+              <option value="all">{lang === 'zh' ? '全部' : 'All'}</option>
+              <option value="planned">{statusLabel.planned}</option>
+              <option value="current">{statusLabel.current}</option>
+              <option value="finished">{statusLabel.finished}</option>
+            </select>
+          </label>
+          <p class="filter-count" data-filter-count aria-live="polite">
+            {lang === 'zh' ? `显示 ${media.length} 条` : `${media.length} shown`}
+          </p>
+        </div>
+
+        {
+          media.length === 0 ? (
+            <p class="empty" role="status">{empty}</p>
+          ) : (
+            <>
+              <ul class="media-list">
+                {media.map((item, index) => {
+                  const data = item.entry.data;
+                  return (
+                    <li
+                      class="media-item"
+                      data-media-item
+                      data-type={data.type}
+                      data-status={data.status}
+                      data-reveal
+                    >
+                      <article aria-labelledby={`media-${index}-title`}>
+                        {data.cover && <img class="cover" src={data.cover} alt="" loading="lazy" />}
+                        <div class="media-body">
+                          <div class="meta-line">
+                            <span class="eyebrow">{typeLabel[data.type]}</span>
+                            <span class="status">{statusLabel[data.status]}</span>
+                            {item.isFallback && (
+                              <span class="fallback" lang={item.entryLang === 'zh' ? 'zh-CN' : 'en'}>
+                                {onlyLabel(item.entryLang)}
+                              </span>
+                            )}
+                          </div>
+                          <h2 id={`media-${index}-title`}>
+                            {data.externalUrl ? (
+                              <a href={data.externalUrl} target="_blank" rel="noopener noreferrer">
+                                {data.title}
+                              </a>
+                            ) : (
+                              data.title
+                            )}
+                          </h2>
+                          <p class="creator">{data.creator}</p>
+                        </div>
+                      </article>
+                    </li>
+                  );
+                })}
+              </ul>
+              <p class="empty filtered-empty" data-filter-empty hidden role="status">{filterEmpty}</p>
+            </>
+          )
+        }
+      </div>
+    </div>
+  </main>
+</BaseLayout>
+
+<script>
+  function setupMediaFilters(): void {
+    const root = document.querySelector<HTMLElement>('[data-media-root]');
+    if (!root || root.dataset.filtersReady === 'true') return;
+    root.dataset.filtersReady = 'true';
+    const type = root.querySelector<HTMLSelectElement>('[data-filter-type]');
+    const status = root.querySelector<HTMLSelectElement>('[data-filter-status]');
+    const count = root.querySelector<HTMLElement>('[data-filter-count]');
+    const empty = root.querySelector<HTMLElement>('[data-filter-empty]');
+    const items = Array.from(root.querySelectorAll<HTMLLIElement>('[data-media-item]'));
+    if (!type || !status || !count || !empty) return;
+    // Preserve the successful DOM narrowing inside the nested filter callback.
+    const typeSelect = type;
+    const statusSelect = status;
+    const countLabel = count;
+    const emptyLabel = empty;
+
+    function applyFilters(): void {
+      let visible = 0;
+      items.forEach((item) => {
+        const matchesType = typeSelect.value === 'all' || item.dataset.type === typeSelect.value;
+        const matchesStatus = statusSelect.value === 'all' || item.dataset.status === statusSelect.value;
+        const matches = matchesType && matchesStatus;
+        item.hidden = !matches;
+        if (matches) visible += 1;
+      });
+      emptyLabel.hidden = visible !== 0;
+      countLabel.textContent = document.documentElement.lang === 'zh-CN' ? `显示 ${visible} 条` : `${visible} shown`;
+    }
+
+    typeSelect.addEventListener('change', applyFilters);
+    statusSelect.addEventListener('change', applyFilters);
+    applyFilters();
+  }
+
+  setupMediaFilters();
+  document.addEventListener('astro:page-load', setupMediaFilters);
+</script>
+
+<style>
+  .content {
+    padding: var(--s2);
+  }
+
+  .heading {
+    padding-bottom: var(--s2);
+    border-bottom: 1px solid var(--rule);
+  }
+
+  h1 {
+    margin-block: 0.35rem 0;
+    font-size: var(--fs-h1);
+  }
+
+  .intro,
+  .empty {
+    color: var(--ink-faded);
+  }
+
+  .count {
+    color: var(--stamp);
+    font-size: var(--fs-lg);
+  }
+
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: var(--s1);
+    padding-block: var(--s1);
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .filters label {
+    display: grid;
+    gap: 0.25rem;
+    color: var(--pencil);
+    font-size: var(--fs-xs);
+  }
+
+  select {
+    min-width: 8rem;
+    border: 1px solid var(--rule);
+    border-radius: 0;
+    padding: 0.35rem 0.5rem;
+    background: var(--paper);
+    color: var(--ink);
+    font: inherit;
+  }
+
+  .filter-count {
+    margin: 0;
+    color: var(--pencil);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+  }
+
+  .media-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .media-item {
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .media-item:last-child {
+    border-bottom: 0;
+  }
+
+  .media-item article {
+    display: grid;
+    grid-template-columns: 5.5rem minmax(0, 1fr);
+    gap: var(--s1);
+    padding-block: var(--s1);
+  }
+
+  .cover {
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    object-fit: cover;
+    border: 1px solid var(--rule);
+  }
+
+  .media-body {
+    min-width: 0;
+  }
+
+  .meta-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.4rem 0.75rem;
+  }
+
+  .status {
+    color: var(--ink-faded);
+    font-size: var(--fs-sm);
+  }
+
+  .fallback {
+    color: var(--stamp);
+    font-size: var(--fs-xs);
+  }
+
+  h2 {
+    margin: 0.35rem 0 0.15rem;
+    font-size: var(--fs-h3);
+  }
+
+  .creator {
+    margin: 0;
+    color: var(--ink-faded);
+  }
+
+  .filtered-empty {
+    margin-top: var(--s1);
+  }
+
+  @media (max-width: 42rem) {
+    .content {
+      padding: var(--s1);
+    }
+  }
+
+  @media (max-width: 28rem) {
+    .media-item article {
+      grid-template-columns: 4rem minmax(0, 1fr);
+    }
+  }
+</style>

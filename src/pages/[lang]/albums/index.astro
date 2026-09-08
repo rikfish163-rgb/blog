@@ -1,0 +1,180 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { assertLang, langPaths } from '../../../lib/content';
+import { albumsFor } from '../../../lib/site-content';
+import { isoDate, readableDate } from '../../../lib/format';
+import type { Lang } from '../../../lib/posts';
+
+export function getStaticPaths() {
+  return langPaths();
+}
+
+const lang = assertLang(Astro.params.lang);
+const albums = await albumsFor(lang);
+const title = lang === 'zh' ? '相册' : 'Albums';
+const intro =
+  lang === 'zh'
+    ? '按主题收拢的照片，不把记忆伪装成数据。'
+    : 'Photographs gathered by theme, without turning memory into data.';
+const empty = lang === 'zh' ? '还没有公开相册。' : 'No public albums yet.';
+const onlyLabel = (entryLang: Lang) => {
+  if (entryLang === 'zh') return lang === 'zh' ? '仅中文' : 'Chinese only';
+  return lang === 'zh' ? '仅英文' : 'English only';
+};
+---
+
+<BaseLayout lang={lang} title={title}>
+  <main id="main" class="page">
+    <div class="sheet sheet--ruled">
+      <aside class="margin" aria-label={lang === 'zh' ? '相册数量' : 'Album count'}>
+        <p class="count mono">{String(albums.length).padStart(2, '0')}</p>
+        <p class="mono">{lang === 'zh' ? '册' : 'albums'}</p>
+      </aside>
+
+      <div class="content paper-surface">
+        <header class="heading">
+          <p class="eyebrow">{lang === 'zh' ? '图像档案' : 'IMAGE ARCHIVE'}</p>
+          <h1>{title}</h1>
+          <p class="intro">{intro}</p>
+        </header>
+
+        {
+          albums.length === 0 ? (
+            <p class="empty" role="status">{empty}</p>
+          ) : (
+            <ul class="album-grid">
+              {albums.map((album, index) => {
+                const data = album.entry.data;
+                return (
+                  <li class="album-item" data-reveal>
+                    <article>
+                      <a class="album-link" href={album.href} aria-labelledby={`album-${index}-title`}>
+                        <img src={data.cover} alt="" loading="lazy" />
+                        <span class="album-caption">
+                          <span class="album-topline">
+                            <time datetime={isoDate(data.date)}>{readableDate(data.date, lang)}</time>
+                            {album.isFallback && (
+                              <span class="fallback" lang={album.entryLang === 'zh' ? 'zh-CN' : 'en'}>
+                                {onlyLabel(album.entryLang)}
+                              </span>
+                            )}
+                          </span>
+                          <strong id={`album-${index}-title`}>{data.title}</strong>
+                          <span>{data.description}</span>
+                        </span>
+                      </a>
+                    </article>
+                  </li>
+                );
+              })}
+            </ul>
+          )
+        }
+      </div>
+    </div>
+  </main>
+</BaseLayout>
+
+<style>
+  .content {
+    padding: var(--s2);
+  }
+
+  .heading {
+    padding-bottom: var(--s2);
+    border-bottom: 1px solid var(--rule);
+  }
+
+  h1 {
+    margin-block: 0.35rem 0;
+    font-size: var(--fs-h1);
+  }
+
+  .intro,
+  .empty {
+    color: var(--ink-faded);
+  }
+
+  .count {
+    color: var(--stamp);
+    font-size: var(--fs-lg);
+  }
+
+  .album-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--s2) var(--s1);
+    list-style: none;
+    margin: 0;
+    padding: var(--s2) 0 0;
+  }
+
+  .album-item {
+    min-width: 0;
+  }
+
+  .album-link {
+    display: block;
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .album-link img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    border: 1px solid var(--rule);
+    filter: saturate(0.86);
+    transition: filter var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+  }
+
+  .album-link:hover img,
+  .album-link:focus-visible img {
+    filter: saturate(1);
+    transform: translateY(-2px);
+  }
+
+  .album-caption {
+    display: grid;
+    gap: 0.35rem;
+    padding-top: 0.65rem;
+    border-top: 1px solid var(--rule);
+    margin-top: 0.5rem;
+  }
+
+  .album-topline {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.5rem;
+    color: var(--pencil);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+  }
+
+  .album-caption strong {
+    font-size: var(--fs-h3);
+    font-weight: 600;
+  }
+
+  .album-caption > span:last-child {
+    color: var(--ink-faded);
+    font-size: var(--fs-sm);
+  }
+
+  .fallback {
+    color: var(--stamp);
+    white-space: nowrap;
+  }
+
+  @media (max-width: 34rem) {
+    .content {
+      padding: var(--s1);
+    }
+
+    .album-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

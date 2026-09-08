@@ -1,0 +1,376 @@
+/**
+ * 动效层。
+ *
+ * 总原则：所有特效服从同一套物理 —— 墨与纸。
+ * 廉价感来自五种动效各说各话；高级感来自工艺一致。
+ *
+ * 性能纪律（对应"CSS 为主、canvas 只用于点击"这个既定底线）：
+ *   - 渐变背景只动 transform，绝不动 gradient 色标或 filter
+ *   - 只有点击涟漪用 canvas，且空闲时不跑 RAF
+ *   - 滚动揭示用 IntersectionObserver，不用非 Baseline 的 scroll-driven 动画
+ */
+
+/* ─────────────────────────────────────────────────────────
+   1. 流动墨渐变背景
+   ───────────────────────────────────────────────────────── */
+
+.ink-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  overflow: hidden;
+  pointer-events: none;
+  /* 独立成层，避免它的动画引起其它内容重绘 */
+  contain: strict;
+  opacity: var(--ink-backdrop-opacity);
+}
+
+.ink-backdrop__blob {
+  position: absolute;
+  /* 比视口大很多：这样漂移时边缘永远不会露出来 */
+  width: var(--ink-blob-size);
+  height: var(--ink-blob-size);
+  border-radius: 50%;
+  /* 柔和的 radial-gradient 本身就够软，不需要再叠 filter: blur()
+     —— 大面积模糊在低端 GPU 上非常贵 */
+  will-change: transform;
+  /* 提示浏览器单独提层，让动画走合成器而不是主线程重绘 */
+  transform: translate3d(0, 0, 0);
+}
+
+.ink-backdrop__blob--1 {
+  top: -30vmax;
+  left: -20vmax;
+  background: radial-gradient(circle closest-side, var(--ink-blob-1), transparent 70%);
+  animation: ink-drift-1 var(--dur-drift) linear infinite;
+}
+
+.ink-backdrop__blob--2 {
+  bottom: -35vmax;
+  right: -25vmax;
+  background: radial-gradient(circle closest-side, var(--ink-blob-2), transparent 70%);
+  /* 三块用不同周期，避免同步移动看起来像一整块在平移 */
+  animation: ink-drift-2 calc(var(--dur-drift) * 1.45) linear infinite;
+}
+
+.ink-backdrop__blob--3 {
+  top: 20vmax;
+  right: -30vmax;
+  background: radial-gradient(circle closest-side, var(--ink-blob-3), transparent 72%);
+  animation: ink-drift-3 calc(var(--dur-drift) * 1.9) linear infinite;
+}
+
+/* 起止必须完全相同，否则循环处会有一次可见的跳。
+   平移幅度控制在 ±12vmax 内，太大就不像"墨在水里慢慢散"而像背景在滑动。 */
+@keyframes ink-drift-1 {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(calc(8vmax * var(--ink-motion-scale)), calc(6vmax * var(--ink-motion-scale)), 0)
+      scale(1.08);
+  }
+  66% {
+    transform: translate3d(calc(-4vmax * var(--ink-motion-scale)), calc(10vmax * var(--ink-motion-scale)), 0)
+      scale(0.96);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes ink-drift-2 {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  40% {
+    transform: translate3d(calc(-10vmax * var(--ink-motion-scale)), calc(-5vmax * var(--ink-motion-scale)), 0)
+      scale(1.06);
+  }
+  75% {
+    transform: translate3d(calc(5vmax * var(--ink-motion-scale)), calc(-9vmax * var(--ink-motion-scale)), 0)
+      scale(0.94);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes ink-drift-3 {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(calc(-7vmax * var(--ink-motion-scale)), calc(8vmax * var(--ink-motion-scale)), 0)
+      scale(1.1);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+/* 长文页保留墨色构图，但冻结正文外的持续装饰。 */
+:root[data-page-type='article'] .ink-backdrop {
+  --ink-backdrop-opacity: 0.42;
+}
+
+:root[data-page-type='article'] .ink-backdrop__blob {
+  animation: none;
+  will-change: auto;
+}
+
+/**
+ * 颗粒层。128×128 的 SVG feTurbulence 平铺。
+ * 作用是消除大面积渐变的 banding —— 这是"贵"感的关键细节，
+ * 没有它，再柔和的渐变在 8bit 屏上也会出现一圈圈色阶。
+ * 零 JS，浏览器只栅格化一次这张小图然后平铺。
+ */
+.ink-backdrop__grain {
+  position: absolute;
+  inset: 0;
+  opacity: var(--grain-opacity);
+  mix-blend-mode: overlay;
+  background-repeat: repeat;
+  background-size: 128px 128px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='128' height='128' filter='url(%23g)'/%3E%3C/svg%3E");
+}
+
+/* ─────────────────────────────────────────────────────────
+   2. 点击涟漪的画布
+   ───────────────────────────────────────────────────────── */
+
+.ink-ripple {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  /* 涟漪是装饰，不该被读屏念出来 */
+}
+
+/* ─────────────────────────────────────────────────────────
+   3. 悬停：纸张抬起
+   ───────────────────────────────────────────────────────── */
+
+[data-lift] {
+  transition:
+    transform var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out),
+    border-color var(--dur) var(--ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  [data-lift]:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-hover);
+    border-color: var(--pencil-light);
+  }
+}
+
+/* ─────────────────────────────────────────────────────────
+   4. 逐行墨迹揭示
+   ───────────────────────────────────────────────────────── */
+
+/**
+ * 位移幅度刻意压到 4px、时长 240ms。
+ * 长文快速滚动时，大幅位移的逐行动画会产生晕感 —— 那是"炫技伤了阅读"的典型。
+ * data-reveal 由 IntersectionObserver 加上 is-in，不用 scroll-driven 动画
+ * （animation-timeline 目前非 Baseline）。
+ *
+ * 隐藏必须限定在 html.reveal-armed 之下。
+ * 曾经踩过：无条件写 [data-reveal]{opacity:0}，而 motion.ts 因为监听注册太晚
+ * 没能执行，结果首屏正文整片空白 —— 装饰性动画绝不能决定内容可见性。
+ * 现在的约定是：只有内联头部脚本确认 JS 可用时才 arm，且 window load 时若
+ * motion.ts 未上报就自动 unarm。
+ */
+html.reveal-armed [data-reveal] {
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity var(--dur) var(--ease-out),
+    transform var(--dur) var(--ease-out);
+}
+
+html.reveal-armed [data-reveal].is-in {
+  opacity: 1;
+  transform: none;
+}
+
+/* ─────────────────────────────────────────────────────────
+   5. 页边铅笔阅读进度
+   ───────────────────────────────────────────────────────── */
+
+.reading-progress {
+  position: relative;
+  width: 2px;
+  /* 高度由装订线区决定，靠 sticky 容器撑开 */
+  height: 6rem;
+  margin-top: 0.75rem;
+  margin-left: auto;
+  background: var(--pencil-light);
+  border-radius: 1px;
+  overflow: hidden;
+}
+
+.reading-progress__bar {
+  position: absolute;
+  inset: 0;
+  background: var(--ink-faded);
+  transform-origin: top;
+  /* 由 JS 写 scaleY(0..1)。只动 transform，滚动时不触发重排 */
+  transform: scaleY(0);
+  will-change: transform;
+}
+
+/* ─────────────────────────────────────────────────────────
+   6. 钢笔尖光标
+   ───────────────────────────────────────────────────────── */
+
+/**
+ * 只在真正有精细指针的设备上启用。
+ * 触屏上自定义光标无效，而且给 body 挂 cursor 会拖慢触摸响应。
+ */
+@media (hover: hover) and (pointer: fine) {
+  html[data-pen-cursor] body {
+    cursor: url('/cursor/pen.svg') 3 21, auto;
+  }
+
+  html[data-pen-cursor] a,
+  html[data-pen-cursor] button,
+  html[data-pen-cursor] [role='button'],
+  html[data-pen-cursor] summary {
+    cursor: url('/cursor/pen-tilt.svg') 5 20, pointer;
+  }
+
+  /*
+   * 语义光标优先级高于装饰。
+   * 输入框必须还是 text，禁用态必须还是 not-allowed，
+   * 拖拽把手必须还是 resize —— 否则自定义光标直接伤可用性。
+   */
+  html[data-pen-cursor] input,
+  html[data-pen-cursor] textarea,
+  html[data-pen-cursor] select,
+  html[data-pen-cursor] [contenteditable] {
+    cursor: auto;
+  }
+
+  html[data-pen-cursor] :disabled,
+  html[data-pen-cursor] [aria-disabled='true'] {
+    cursor: not-allowed;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────
+   7. 翻页过场（View Transitions）
+   ───────────────────────────────────────────────────────── */
+
+/**
+ * 克制的翻页感：新内容轻微上浮淡入，旧内容轻微下沉淡出。
+ * 刻意不做 3D 翻转 —— 那个效果第一次好玩，第三次就烦，而且长文页会晕。
+ */
+@keyframes page-turn-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes page-turn-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+/* ─────────────────────────────────────────────────────────
+   8. 减少动态效果
+   ───────────────────────────────────────────────────────── */
+
+/**
+ * 渐变不是直接关掉，而是冻结在一个构图良好的静态帧 ——
+ * 关掉会让页面突然变得寡淡，冻结既尊重偏好又保留设计。
+ * ClientRouter 自带的媒体查询会另外关掉 View Transitions，这里不必重复。
+ */
+@media (prefers-reduced-motion: reduce) {
+  .ink-backdrop__blob {
+    animation: none !important;
+    will-change: auto;
+  }
+
+  .ink-backdrop__blob--1 {
+    transform: translate3d(4vmax, 3vmax, 0) scale(1.04);
+  }
+  .ink-backdrop__blob--2 {
+    transform: translate3d(-5vmax, -3vmax, 0) scale(1.03);
+  }
+  .ink-backdrop__blob--3 {
+    transform: translate3d(-4vmax, 4vmax, 0) scale(1.05);
+  }
+
+  [data-reveal] {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
+  [data-lift] {
+    transition: none;
+  }
+  [data-lift]:hover {
+    transform: none;
+  }
+
+  .reading-progress__bar {
+    transition: none;
+  }
+}
+
+/* 用户选择"减少"时，与系统 reduced motion 保持同一组静态规则。 */
+:root[data-motion='reduced'] .ink-backdrop__blob {
+  animation: none !important;
+  will-change: auto;
+}
+
+:root[data-motion='reduced'] .ink-backdrop__blob--1 {
+  transform: translate3d(4vmax, 3vmax, 0) scale(1.04);
+}
+
+:root[data-motion='reduced'] .ink-backdrop__blob--2 {
+  transform: translate3d(-5vmax, -3vmax, 0) scale(1.03);
+}
+
+:root[data-motion='reduced'] .ink-backdrop__blob--3 {
+  transform: translate3d(-4vmax, 4vmax, 0) scale(1.05);
+}
+
+html[data-motion='reduced'] [data-reveal] {
+  opacity: 1 !important;
+  transform: none !important;
+  transition: none !important;
+}
+
+html[data-motion='reduced'] [data-lift] {
+  transition: none;
+}
+
+html[data-motion='reduced'] [data-lift]:hover {
+  transform: none;
+}
+
+html[data-motion='reduced'] .reading-progress__bar {
+  transition: none;
+}
+
+/* ClientRouter 的 View Transitions 不读取自定义 motion 属性，手动停掉过场。 */
+html[data-motion='reduced']::view-transition-group(root),
+html[data-motion='reduced']::view-transition-old(root),
+html[data-motion='reduced']::view-transition-new(root) {
+  animation: none !important;
+}

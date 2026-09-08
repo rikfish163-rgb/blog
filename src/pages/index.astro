@@ -1,0 +1,91 @@
+---
+/**
+ * 语言落地页。
+ *
+ * 为什么不用 Astro 的 redirectToDefaultLocale：
+ * `Astro.preferredLocale` 只在按需渲染的页面可用，本站是 100% 静态，拿不到
+ * Accept-Language。所以这里自己做：客户端读 navigator.language 跳转，
+ * 无 JS 时显示两个语言链接兜底。完全静态、行为可预测，而且真能做浏览器语言探测。
+ *
+ * prefixDefaultLocale: true 要求这个文件必须存在，正好用它承担这件事。
+ */
+import { SITE_NAME, SITE_URL, TAGLINE, WORDMARK } from '../site.config';
+---
+
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{SITE_NAME}</title>
+    <meta name="description" content={TAGLINE.zh} />
+    <link rel="canonical" href={new URL('/zh/', SITE_URL).href} />
+    <link rel="alternate" hreflang="zh-CN" href={new URL('/zh/', SITE_URL).href} />
+    <link rel="alternate" hreflang="en" href={new URL('/en/', SITE_URL).href} />
+    <link rel="alternate" hreflang="x-default" href={new URL('/zh/', SITE_URL).href} />
+
+    <link rel="stylesheet" href="/fonts/base.css" />
+    <link rel="preload" href="/fonts/wordmark.woff2" as="font" type="font/woff2" crossorigin />
+
+    <script is:inline>
+      (function () {
+        // 只认语言主标签。zh-TW / zh-HK 也归到 zh —— 简体繁体差异不值得再开一套路由
+        var lang = (navigator.language || 'zh').toLowerCase().split('-')[0];
+        var target = lang === 'zh' ? '/zh/' : '/en/';
+        // replace 而非 assign：不要在历史记录里留下这个中转页，
+        // 否则用户点返回会被弹回来再次跳转，形成死循环
+        location.replace(target);
+      })();
+    </script>
+
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-content: center;
+        gap: 1.5rem;
+        text-align: center;
+        background: #fbf9f3;
+        color: #1f2a37;
+        font-family: 'IBM Plex Mono', ui-monospace, monospace;
+      }
+      .wordmark {
+        font-family: 'Wordmark Brush', serif;
+        font-size: 4rem;
+        line-height: 1;
+      }
+      .links {
+        display: flex;
+        gap: 1.5rem;
+        justify-content: center;
+        font-size: 0.9rem;
+      }
+      a {
+        color: #1f2a37;
+        text-underline-offset: 0.25em;
+      }
+      @media (prefers-color-scheme: dark) {
+        body {
+          background: #14161a;
+          color: #e8e6e1;
+        }
+        a {
+          color: #e8e6e1;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="wordmark">{WORDMARK}</div>
+    <!-- 无 JS 时这就是唯一的出口，所以必须是真链接而不是提示文字 -->
+    <noscript>
+      <p>选择语言 / Choose a language</p>
+    </noscript>
+    <div class="links">
+      <a href="/zh/">中文</a>
+      <a href="/en/">English</a>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+  <!--
+    可点击元素上的光标：同一支笔略微倾斜、笔尖压低，
+    像真的要落笔写字。绕笔尖旋转，所以热点仍在 (5,20)。
+  -->
+  <g transform="rotate(-12 5 20)">
+    <g fill="#1f2a37" stroke="#fbf9f3" stroke-width="1.1" stroke-linejoin="round">
+      <path d="M4.2 20.6 L7.6 17.2 L18.9 5.9 A1.4 1.4 0 0 0 18.9 3.9 L18.1 3.1 A1.4 1.4 0 0 0 16.1 3.1 L4.8 14.4 L1.4 17.8 Z" />
+    </g>
+    <path d="M5.6 15.6 L8.4 18.4" stroke="#fbf9f3" stroke-width="1" stroke-linecap="round" fill="none" opacity="0.85" />
+    <circle cx="10.2" cy="13.8" r="1" fill="#fbf9f3" opacity="0.9" />
+  </g>
+  <!-- 笔尖下方一小点墨：暗示"这里可以按" -->
+  <circle cx="4" cy="21.4" r="1.5" fill="#c1362f" opacity="0.9" />
+</svg>

@@ -1,0 +1,256 @@
+---
+import { ClientRouter } from 'astro:transitions';
+import '../styles/global.css';
+import '../styles/motion.css';
+import InkBackdrop from '../components/effects/InkBackdrop.astro';
+import InkRipple from '../components/effects/InkRipple.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import { SITE_NAME, SITE_URL, HTML_LANG, TAGLINE, type Locale } from '../site.config';
+import type { Lang } from '../lib/posts';
+
+interface Props {
+  lang: Lang;
+  title?: string;
+  description?: string;
+  /** 只有确实用到公式的页面才加载 KaTeX CSS */
+  math?: boolean;
+  /** 文章页传 'article'，用于 og:type */
+  ogType?: 'website' | 'article';
+  /** 当前栏目，用于导航高亮 */
+  current?: 'posts' | 'archive' | 'tags' | 'about' | 'search' | 'account';
+  /** 首页不重复显示站名 */
+  isHome?: boolean;
+  /** 目标语言是否有真译文，供 LangSwitch 如实提示 */
+  targetHasTranslation?: boolean;
+}
+
+const {
+  lang,
+  title,
+  description,
+  math = false,
+  ogType = 'website',
+  current,
+  isHome = false,
+  targetHasTranslation,
+} = Astro.props;
+
+const locale = lang as Locale;
+const pageTitle = title ? `${title} · ${SITE_NAME}` : SITE_NAME;
+const desc = description ?? TAGLINE[locale];
+
+/**
+ * hreflang 备用链接。Astro 不会自动生成，必须手写。
+ * 把路径里的语言段替换掉即可，因为两种语言的路由结构完全对称。
+ */
+const path = Astro.url.pathname;
+function withLang(target: Lang): string {
+  const swapped = path.replace(/^\/(zh|en)(?=\/|$)/, `/${target}`);
+  return new URL(swapped, SITE_URL).href;
+}
+const canonical = new URL(path, SITE_URL).href;
+const hasTargetLanguage = targetHasTranslation !== false;
+const requestedVisual = Astro.url.searchParams.get('visual');
+const visualMode =
+  import.meta.env.DEV && ['balanced', 'fluid', 'quiet'].includes(requestedVisual ?? '')
+    ? requestedVisual
+    : 'fluid';
+---
+
+<!doctype html>
+<!--
+  lang 必须正确：Pagefind 靠 <html lang> 建分语言索引，写错中文搜索直接失效。
+  no-js 由下面的内联脚本立刻摘掉；若脚本没跑（被拦/出错），这个类会保留，
+  让 CSS 把所有 [data-reveal] 强制显示 —— 装饰性动画绝不能决定内容可见性。
+-->
+<html
+  lang={HTML_LANG[locale]}
+  data-theme="light"
+  data-motion="full"
+  data-font="paper"
+  data-page-type={ogType}
+  data-visual={visualMode}
+  data-visual-preview={import.meta.env.DEV ? 'enabled' : undefined}
+  class="no-js"
+>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{pageTitle}</title>
+    <meta name="description" content={desc} />
+    <link rel="canonical" href={canonical} />
+
+    {/* SVG favicon 在所有现代浏览器可用，且能随尺寸缩放不失真。
+        BlogFinder 收录也要求站点有图标。 */}
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
+
+    {(lang === 'zh' || hasTargetLanguage) && <link rel="alternate" hreflang="zh-CN" href={withLang('zh')} />}
+    {(lang === 'en' || hasTargetLanguage) && <link rel="alternate" hreflang="en" href={withLang('en')} />}
+    <link rel="alternate" hreflang="x-default" href={hasTargetLanguage ? withLang('zh') : canonical} />
+
+    <meta property="og:type" content={ogType} />
+    <meta property="og:title" content={title ?? SITE_NAME} />
+    <meta property="og:description" content={desc} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:locale" content={locale === 'zh' ? 'zh_CN' : 'en_US'} />
+    <meta name="twitter:card" content="summary" />
+
+    <link rel="alternate" type="application/rss+xml" title={SITE_NAME} href={`/${lang}/rss.xml`} />
+
+    {/*
+      字体按语言分载。/en 页面完全不加载 18.8MB 的 CJK 字体包 ——
+      这是"完整双语"这个决定唯一的性能红利，务必用上。
+      base.css 两种语言都要：等宽（代码与数字）+ 毛笔站名（1.4KB 子集）。
+    */}
+    <link rel="stylesheet" href="/fonts/base.css" />
+    <link rel="stylesheet" href={lang === 'zh' ? '/fonts/zh.css' : '/fonts/en.css'} />
+
+    {/*
+      站名那两个字是首屏最显眼的元素，且 font-display: block。
+      预载它，否则会有一段可见的空白。1.4KB，代价可以忽略。
+    */}
+    <link rel="preload" href="/fonts/wordmark.woff2" as="font" type="font/woff2" crossorigin />
+
+    {math && <link rel="stylesheet" href="/katex/katex.min.css" />}
+
+    {/*
+      防闪烁主题脚本。必须 is:inline —— 打包后的 module script 会被 defer，
+      跑在首次绘制之后，那样切换暗色时会先闪一下白底。
+    */}
+    <script is:inline>
+      (function () {
+        var root = document.documentElement;
+
+        function readStorage(key) {
+          try {
+            return localStorage.getItem(key);
+          } catch (e) {
+            // 隐私模式下 localStorage 可能不可用，交给系统偏好兜底。
+            return null;
+          }
+        }
+
+        function resolveTheme() {
+          var saved = readStorage('theme');
+          if (saved === 'light' || saved === 'dark') return saved;
+          return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+
+        function resolveMotion() {
+          var saved = readStorage('motion');
+          if (saved === 'full' || saved === 'reduced') return saved;
+          return window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'reduced' : 'full';
+        }
+
+        function resolveFont() {
+          var saved = readStorage('reading-font');
+          return saved === 'standard' ? 'standard' : 'paper';
+        }
+
+        function applySettings() {
+          var theme = resolveTheme();
+          root.dataset.theme = theme;
+          // expressive-code 的主题靠这个属性切换（配置里关了它的媒体查询）
+          root.dataset.ecTheme = theme === 'dark' ? 'github-dark' : 'github-light';
+          root.dataset.motion = resolveMotion();
+          root.dataset.font = resolveFont();
+        }
+
+        // JS 可用，摘掉兜底类。放在最前面，避免正文先显示再被动画藏起来。
+        root.classList.remove('no-js');
+        applySettings();
+
+        function applyVisualPreview() {
+          if (root.dataset.visualPreview !== 'enabled') return;
+          var requested = new URLSearchParams(window.location.search).get('visual');
+          root.dataset.visual =
+            requested === 'fluid' || requested === 'quiet' || requested === 'balanced'
+              ? requested
+              : 'fluid';
+        }
+        applyVisualPreview();
+
+        /*
+         * arm 逐行揭示动画。必须在这里（绘制前）加，否则会先看到正文再被藏起来。
+         * 配一个 load 时的保险：那时 motion.ts 必然已执行完，若它没上报
+         * __motionBound 就说明脚本挂了，直接 unarm 让正文无条件可见。
+         * 曾经因为动画脚本没跑导致首屏整片空白，这条是为此加的。
+         */
+        root.classList.add('reveal-armed');
+        window.addEventListener('load', function () {
+          if (!window.__motionBound) {
+            root.classList.remove('reveal-armed');
+          }
+        });
+
+        // View Transitions 会换掉 <html> 的属性，导航后必须重新写回，
+        // 否则点进第二个页面就变回初始设置。after-swap 在绘制前触发，不会闪。
+        document.addEventListener('astro:after-swap', function () {
+          root.classList.remove('no-js');
+          applySettings();
+          applyVisualPreview();
+        });
+        window.addEventListener('popstate', applyVisualPreview);
+      })();
+    </script>
+
+    {/*
+      ClientRouter 把站点变成 SPA，翻页过场靠它。
+      代价：打包的 module script 只执行一次，后续导航全部忽略 ——
+      所有初始化逻辑必须挂 astro:page-load，见 scripts/motion.ts。
+      好处：prefers-reduced-motion 由它自动处理，无障碍免费达标。
+    */}
+    <ClientRouter />
+  </head>
+
+  <body>
+    <a class="skip-link" href="#main">{lang === 'zh' ? '跳到正文' : 'Skip to content'}</a>
+
+    <InkBackdrop />
+    <InkRipple />
+
+    <Header lang={lang} current={current} isHome={isHome} targetHasTranslation={targetHasTranslation} />
+
+    <slot />
+
+    <Footer lang={lang} />
+    <script is:inline>
+      (function () {
+        var memory = Object.create(null);
+
+        function sendView() {
+          var pathname = window.location.pathname;
+          if (!pathname || pathname.charAt(0) !== '/') return;
+          var key = 'analytics-view:' + pathname;
+          try {
+            if (window.sessionStorage.getItem(key) === '1') return;
+            window.sessionStorage.setItem(key, '1');
+          } catch (_error) {
+            if (memory[key]) return;
+            memory[key] = true;
+          }
+
+          window.fetch('/api/analytics/view', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ pathname: pathname }),
+            keepalive: true,
+          }).catch(function () {
+            // Analytics is optional; a blocked endpoint must not affect navigation.
+          });
+        }
+
+        document.addEventListener('astro:page-load', sendView);
+        sendView();
+      })();
+    </script>
+
+
+    <script>
+      // 必须挂 astro:page-load 而不是 DOMContentLoaded —— 见文件内注释
+      import '../scripts/motion.ts';
+    </script>
+  </body>
+</html>

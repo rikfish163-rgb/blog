@@ -1,0 +1,79 @@
+<script>
+  import { authClient } from '../lib/auth-client';
+
+  function setStatus(message: string): void {
+    const status = document.querySelector<HTMLElement>('[data-account-status]');
+    if (!status) return;
+    status.textContent = message;
+    status.hidden = false;
+  }
+
+  function callbackURL(): string {
+    return `${window.location.origin}${window.location.pathname}`;
+  }
+  function assertClientSuccess(result: unknown): void {
+    if (typeof result !== 'object' || result === null || !('error' in result)) return;
+    const error = (result as { error?: unknown }).error;
+    if (!error) return;
+    if (typeof error === 'object' && error !== null && 'message' in error) {
+      throw new Error(String((error as { message?: unknown }).message ?? 'Authentication failed'));
+    }
+    throw new Error(String(error));
+  }
+
+  function bindAccountActions(): void {
+    const buttons = document.querySelectorAll<HTMLButtonElement>('[data-auth-action]');
+    for (const button of buttons) {
+      if (button.dataset.authBound === 'true') continue;
+      button.dataset.authBound = 'true';
+      button.addEventListener('click', async () => {
+        const action = button.dataset.authAction;
+        const provider = button.dataset.provider;
+        const accountId = button.dataset.accountId;
+        button.disabled = true;
+
+        try {
+          if (action === 'login' && provider) {
+            const result = await authClient.signIn.social({
+              provider,
+              callbackURL: callbackURL(),
+              errorCallbackURL: callbackURL(),
+            });
+            assertClientSuccess(result);
+            return;
+          }
+          if (action === 'link' && provider) {
+            const result = await authClient.linkSocial({
+              provider,
+              callbackURL: callbackURL(),
+              errorCallbackURL: callbackURL(),
+            });
+            assertClientSuccess(result);
+            return;
+          }
+          if (action === 'unlink' && accountId) {
+            assertClientSuccess(await authClient.unlinkAccount({ accountId }));
+            window.location.reload();
+            return;
+          }
+          if (action === 'signout') {
+            assertClientSuccess(await authClient.signOut());
+            window.location.reload();
+            return;
+          }
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : '';
+          setStatus(
+            message.includes('account_not_linked')
+              ? '该渠道已属于其他账号，请先登录原账号，再从账号页显式绑定。 / This provider belongs to another account. Sign in to that account first, then link it explicitly.'
+              : '操作未完成，请稍后重试。 / The operation could not be completed. Please try again.',
+          );
+          button.disabled = false;
+        }
+      });
+    }
+  }
+
+  document.addEventListener('astro:page-load', bindAccountActions);
+  bindAccountActions();
+</script>

@@ -1,0 +1,274 @@
+@import './tokens.css';
+
+/* ─────────────────────────────────────────────────────────
+   基础重置
+   ───────────────────────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  /* 方格纸。用 repeating-linear-gradient 画，零图片请求。
+     两层：细线每格一条，粗线每 5 格一条，像真的坐标纸。
+     background-attachment: fixed 让格子不随滚动跑，强化"一整张纸"的感觉。 */
+  background-color: var(--paper);
+  background-image:
+    repeating-linear-gradient(to right, var(--grid-major) 0 1px, transparent 1px calc(var(--grid-size) * 5)),
+    repeating-linear-gradient(to bottom, var(--grid-major) 0 1px, transparent 1px calc(var(--grid-size) * 5)),
+    repeating-linear-gradient(to right, var(--grid) 0 1px, transparent 1px var(--grid-size)),
+    repeating-linear-gradient(to bottom, var(--grid) 0 1px, transparent 1px var(--grid-size));
+  background-attachment: fixed;
+
+  -webkit-text-size-adjust: 100%;
+  scrollbar-gutter: stable;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-base);
+  line-height: var(--lh-body);
+  color: var(--ink);
+  /* 纸底本身透明，让 InkBackdrop 的渐变从 html 背景后透出来 */
+  background: transparent;
+  min-height: 100vh;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+img,
+picture,
+video,
+canvas,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-weight: 600;
+  line-height: var(--lh-heading);
+  letter-spacing: var(--ls-heading);
+  color: var(--ink-strong);
+  margin: 0;
+  /* 中文标题避免在标点处折行 */
+  line-break: strict;
+}
+
+p {
+  margin: 0;
+  /* 中文首行不缩进，靠段间距区分段落——屏幕阅读比缩进更清晰 */
+  text-wrap: pretty;
+}
+
+a {
+  color: inherit;
+  /* 下划线避开汉字的下伸笔画 */
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.25em;
+  text-decoration-color: var(--pencil-light);
+  transition: text-decoration-color var(--dur-fast) var(--ease);
+}
+
+a:hover {
+  text-decoration-color: var(--stamp);
+}
+
+/* 焦点环必须始终可见——这是无障碍的地板，不因为设计克制而牺牲 */
+:focus-visible {
+  outline: 2px solid var(--stamp);
+  outline-offset: 3px;
+  border-radius: 1px;
+}
+
+/* 只在键盘导航时显示，鼠标点击不显示 */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* JS 只是增强层；脚本未执行时，正文和揭示内容仍必须直接可见。 */
+html.no-js [data-reveal] {
+  opacity: 1;
+  transform: none;
+  transition: none;
+}
+
+/* ─────────────────────────────────────────────────────────
+   布局：正文列 + 左侧装订线区
+   ───────────────────────────────────────────────────────── */
+
+.page {
+  max-width: var(--page-max);
+  margin-inline: auto;
+  padding-inline: var(--s1);
+}
+
+/**
+ * 正文容器。左侧留出 --gutter 宽的装订线区，放页码/日期/批注/阅读进度。
+ * 移动端（无空间）装订线区折叠掉，批注转为行内显示。
+ */
+.sheet {
+  display: grid;
+  grid-template-columns: var(--gutter) minmax(0, var(--measure));
+  gap: 0 var(--s2);
+  margin-inline: auto;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.sheet > .margin {
+  grid-column: 1;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--pencil);
+  text-align: right;
+  /* 装订线内容贴着正文顶部对齐 */
+  align-self: start;
+  position: sticky;
+  top: var(--s3);
+  user-select: none;
+  /* 批注是短句，不该被逐字折行。放不下就让它溢出而不是压成竖排。 */
+  overflow-wrap: normal;
+  word-break: keep-all;
+}
+
+/* 页边所有直系子元素默认单行，避免中文被拆成一字一行 */
+.sheet > .margin > * {
+  white-space: nowrap;
+}
+
+@media (max-width: 46rem) {
+  /* 折叠成一行横向排列，而不是继续占一整列 */
+  .sheet > .margin {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.9rem;
+  }
+}
+
+.sheet > .content {
+  grid-column: 2;
+  min-width: 0;
+}
+
+@media (max-width: 46rem) {
+  .sheet {
+    grid-template-columns: minmax(0, 1fr);
+    width: auto;
+  }
+  .sheet > .margin {
+    grid-column: 1;
+    position: static;
+    text-align: left;
+    margin-bottom: var(--s1);
+  }
+  .sheet > .content {
+    grid-column: 1;
+  }
+}
+
+/* 装订线：一条竖线，像笔记本的订口 */
+.sheet--ruled > .margin {
+  border-right: 1px solid var(--pencil-light);
+  padding-right: var(--s1);
+}
+
+@media (max-width: 46rem) {
+  .sheet--ruled > .margin {
+    border-right: none;
+    border-bottom: 1px solid var(--pencil-light);
+    padding-right: 0;
+    padding-bottom: 0.5rem;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────
+   纸面：压住背后的渐变，保证正文对比度
+   ───────────────────────────────────────────────────────── */
+
+/**
+ * 动态渐变衬在文字后面是最大的无障碍风险。所有承载正文的容器都坐在
+ * 接近不透明的纸面上，渐变只在其"后面"低透明度流动。
+ * 这样 WCAG AA 在动画的任何相位都成立，而不是靠运气。
+ */
+.paper-surface {
+  background-color: var(--paper-raised);
+  /* 96% 而非 100%：留一点透气感，能微微看见背后的墨色流动，但不影响读字 */
+  background-color: color-mix(in srgb, var(--paper-raised) 96%, transparent);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-card);
+}
+
+/* ─────────────────────────────────────────────────────────
+   印章：日期不用普通 <time>，做成朱砂小印
+   ───────────────────────────────────────────────────────── */
+
+.seal {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--stamp);
+  padding: 0.1em 0.45em;
+  border: 1px solid currentColor;
+  border-radius: var(--radius);
+  background: var(--stamp-soft);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+/* ─────────────────────────────────────────────────────────
+   小工具
+   ───────────────────────────────────────────────────────── */
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-wide);
+  color: var(--pencil);
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 屏幕阅读器专用文本 */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* 跳转到正文：键盘用户第一个 Tab 就能拿到 */
+.skip-link {
+  position: absolute;
+  left: var(--s1);
+  top: -4rem;
+  z-index: 100;
+  padding: 0.5rem 1rem;
+  background: var(--paper-raised);
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  transition: top var(--dur) var(--ease-out);
+}
+
+.skip-link:focus {
+  top: var(--s1);
+}

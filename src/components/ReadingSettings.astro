@@ -1,0 +1,357 @@
+---
+import type { Lang } from '../lib/posts';
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const copy =
+  lang === 'zh'
+    ? {
+        trigger: '阅读设置',
+        title: '阅读设置',
+        theme: '主题',
+        light: '亮色',
+        dark: '暗色',
+        motion: '动效',
+        full: '完整',
+        reduced: '减少',
+        font: '字体',
+        paper: '纸感',
+        standard: '标准',
+      }
+    : {
+        trigger: 'Reading settings',
+        title: 'Reading settings',
+        theme: 'Theme',
+        light: 'Light',
+        dark: 'Dark',
+        motion: 'Motion',
+        full: 'Full',
+        reduced: 'Reduced',
+        font: 'Font',
+        paper: 'Paper',
+        standard: 'Standard',
+      };
+---
+
+<div class="reading-settings" data-reading-settings>
+  <button
+    type="button"
+    class="reading-settings__trigger"
+    data-reading-settings-trigger
+    aria-controls="reading-settings-panel"
+    aria-expanded="false"
+    aria-label={copy.trigger}
+  >
+    <svg class="reading-settings__icon" viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M4 5h12M4 10h12M4 15h12" />
+      <circle cx="8" cy="5" r="1.5" />
+      <circle cx="13" cy="10" r="1.5" />
+      <circle cx="7" cy="15" r="1.5" />
+    </svg>
+    <span class="reading-settings__trigger-label">{copy.trigger}</span>
+  </button>
+
+  <div
+    id="reading-settings-panel"
+    class="reading-settings__panel"
+    data-reading-settings-panel
+    role="dialog"
+    aria-labelledby="reading-settings-title"
+    hidden
+  >
+    <h2 id="reading-settings-title" class="reading-settings__title">{copy.title}</h2>
+
+    <fieldset class="reading-settings__group">
+      <legend>{copy.theme}</legend>
+      <div class="reading-settings__options">
+        <button type="button" class="reading-settings__option" data-reading-setting="theme" data-value="light" aria-pressed="true">
+          {copy.light}
+        </button>
+        <button type="button" class="reading-settings__option" data-reading-setting="theme" data-value="dark" aria-pressed="false">
+          {copy.dark}
+        </button>
+      </div>
+    </fieldset>
+
+    <fieldset class="reading-settings__group">
+      <legend>{copy.motion}</legend>
+      <div class="reading-settings__options">
+        <button type="button" class="reading-settings__option" data-reading-setting="motion" data-value="full" aria-pressed="true">
+          {copy.full}
+        </button>
+        <button type="button" class="reading-settings__option" data-reading-setting="motion" data-value="reduced" aria-pressed="false">
+          {copy.reduced}
+        </button>
+      </div>
+    </fieldset>
+
+    <fieldset class="reading-settings__group">
+      <legend>{copy.font}</legend>
+      <div class="reading-settings__options">
+        <button type="button" class="reading-settings__option" data-reading-setting="font" data-value="paper" aria-pressed="true">
+          {copy.paper}
+        </button>
+        <button type="button" class="reading-settings__option" data-reading-setting="font" data-value="standard" aria-pressed="false">
+          {copy.standard}
+        </button>
+      </div>
+    </fieldset>
+  </div>
+</div>
+
+<style>
+  .reading-settings {
+    position: relative;
+    z-index: 2;
+  }
+
+  .reading-settings__trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0.35rem 0.55rem;
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    color: var(--ink-faded);
+    background: transparent;
+    font: inherit;
+    font-size: var(--fs-sm);
+    line-height: 1.2;
+    white-space: nowrap;
+    transition:
+      color var(--dur-fast) var(--ease),
+      border-color var(--dur-fast) var(--ease),
+      background-color var(--dur-fast) var(--ease);
+  }
+
+  .reading-settings__trigger:hover,
+  .reading-settings__trigger[aria-expanded='true'] {
+    color: var(--ink);
+    border-color: var(--rule);
+    background: var(--paper-raised);
+  }
+
+  .reading-settings__icon {
+    width: 1.15rem;
+    height: 1.15rem;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.35;
+    stroke-linecap: round;
+  }
+
+  .reading-settings__icon circle {
+    fill: var(--paper-raised);
+  }
+
+  .reading-settings__panel {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    right: 0;
+    width: min(20rem, calc(100vw - 2 * var(--s1)));
+    max-width: calc(100vw - 2 * var(--s1));
+    padding: 1rem;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-card);
+    background: var(--paper-raised);
+    box-shadow: var(--shadow-raised);
+  }
+
+  .reading-settings__panel[hidden] {
+    display: none;
+  }
+
+  .reading-settings__title {
+    margin: 0 0 0.8rem;
+    color: var(--ink-strong);
+    font-size: var(--fs-base);
+    line-height: var(--lh-tight);
+  }
+
+  .reading-settings__group {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .reading-settings__group + .reading-settings__group {
+    margin-top: 0.85rem;
+  }
+
+  .reading-settings__group legend {
+    margin-bottom: 0.3rem;
+    padding: 0;
+    color: var(--ink-faded);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    letter-spacing: 0.04em;
+  }
+
+  .reading-settings__options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.45rem;
+  }
+
+  .reading-settings__option {
+    min-width: 0;
+    min-height: 44px;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    color: var(--ink-faded);
+    background: transparent;
+    font: inherit;
+    font-size: var(--fs-sm);
+    line-height: 1.25;
+    white-space: nowrap;
+    transition:
+      color var(--dur-fast) var(--ease),
+      border-color var(--dur-fast) var(--ease),
+      background-color var(--dur-fast) var(--ease);
+  }
+
+  .reading-settings__option:hover,
+  .reading-settings__option[aria-pressed='true'] {
+    color: var(--ink-strong);
+    border-color: var(--stamp);
+    background: var(--stamp-soft);
+  }
+
+  @media (max-width: 32rem) {
+    .reading-settings__panel {
+      position: fixed;
+      top: auto;
+      right: var(--s1);
+      bottom: var(--s1);
+      width: min(20rem, calc(100vw - 2 * var(--s1)));
+      max-height: calc(100vh - 2 * var(--s1));
+      overflow: auto;
+    }
+
+    .reading-settings__trigger-label {
+      display: none;
+    }
+  }
+</style>
+
+<script>
+  type SettingName = 'theme' | 'motion' | 'font';
+  type ReadingSettingsWindow = Window & { __readingSettingsBound?: boolean };
+
+  const settings = {
+    theme: { attribute: 'theme', storageKey: 'theme', values: ['light', 'dark'] },
+    motion: { attribute: 'motion', storageKey: 'motion', values: ['full', 'reduced'] },
+    font: { attribute: 'font', storageKey: 'reading-font', values: ['paper', 'standard'] },
+  } as const;
+
+  const readingSettingsWindow = window as ReadingSettingsWindow;
+
+  if (!readingSettingsWindow.__readingSettingsBound) {
+    readingSettingsWindow.__readingSettingsBound = true;
+
+    const root = document.documentElement;
+
+    function isSettingName(value: string | undefined): value is SettingName {
+      return value === 'theme' || value === 'motion' || value === 'font';
+    }
+
+    function isAllowedValue(name: SettingName, value: string): boolean {
+      return settings[name].values.some((allowed) => allowed === value);
+    }
+
+    function syncState(): void {
+      document.querySelectorAll<HTMLButtonElement>('[data-reading-setting]').forEach((button) => {
+        const name = button.dataset.readingSetting;
+        const value = button.dataset.value;
+        if (!isSettingName(name) || !value) return;
+        const pressed = root.dataset[settings[name].attribute] === value;
+        button.setAttribute('aria-pressed', String(pressed));
+      });
+    }
+
+    function setPanelOpen(trigger: HTMLButtonElement, open: boolean): void {
+      const panelId = trigger.getAttribute('aria-controls');
+      const panel = panelId ? document.getElementById(panelId) : null;
+      trigger.setAttribute('aria-expanded', String(open));
+      if (panel) panel.hidden = !open;
+    }
+
+    function closePanels(): void {
+      document.querySelectorAll<HTMLButtonElement>('[data-reading-settings-trigger]').forEach((trigger) => {
+        setPanelOpen(trigger, false);
+      });
+    }
+
+    function applySetting(name: string | undefined, value: string | undefined): void {
+      if (!isSettingName(name) || !value || !isAllowedValue(name, value)) return;
+
+      root.dataset[settings[name].attribute] = value;
+      if (name === 'theme') {
+        root.dataset.ecTheme = value === 'dark' ? 'github-dark' : 'github-light';
+        document.dispatchEvent(new CustomEvent('blog:theme-change', { detail: { theme: value } }));
+      }
+
+      try {
+        localStorage.setItem(settings[name].storageKey, value);
+      } catch {
+        // 隐私模式下仍保留当前页的设置，只是不写入本地存储。
+      }
+
+      syncState();
+    }
+
+    document.addEventListener('click', (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+
+      const trigger = target.closest<HTMLButtonElement>('[data-reading-settings-trigger]');
+      if (trigger) {
+        const currentlyOpen = trigger.getAttribute('aria-expanded') === 'true';
+        closePanels();
+        setPanelOpen(trigger, !currentlyOpen);
+        return;
+      }
+
+      const option = target.closest<HTMLButtonElement>('[data-reading-setting]');
+      if (option) {
+        applySetting(option.dataset.readingSetting, option.dataset.value);
+        return;
+      }
+
+      if (!target.closest('[data-reading-settings]')) closePanels();
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') return;
+
+      const openTrigger = Array.from(
+        document.querySelectorAll<HTMLButtonElement>('[data-reading-settings-trigger]'),
+      ).find((candidate) => candidate.getAttribute('aria-expanded') === 'true');
+      if (!openTrigger) return;
+
+      setPanelOpen(openTrigger, false);
+      openTrigger.focus();
+      event.preventDefault();
+    });
+
+    document.addEventListener('astro:page-load', syncState);
+    document.addEventListener('astro:after-swap', syncState);
+
+    const observer = new MutationObserver(syncState);
+    observer.observe(root, {
+      attributes: true,
+      attributeFilter: ['data-theme', 'data-motion', 'data-font'],
+    });
+
+    syncState();
+  }
+</script>

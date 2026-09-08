@@ -1,0 +1,651 @@
+---
+import { isoDate, sealDate } from '../lib/format';
+import type { Entry } from '../lib/content';
+import type { Lang, Resolved } from '../lib/posts';
+import type { ResolvedProject } from '../lib/site-content';
+import generatedStats from '../generated/stats.json';
+import InkHeatmap from './InkHeatmap.astro';
+import ObservationRow from './ObservationRow.astro';
+import { PUBLIC_STATS } from '../site.config';
+
+interface StatsSnapshot {
+  writing: {
+    available: boolean;
+    publishedCount: number;
+    days: { date: string; count: number }[];
+  };
+  github: {
+    available: boolean;
+    days: { date: string; count: number }[];
+  };
+  editorTime: {
+    available: boolean;
+    totalMinutes: number;
+  };
+  visits: {
+    available: boolean;
+    days: { date: string; views: number; uniques: number }[];
+    totalViews: number;
+    totalUniques: number;
+  };
+}
+
+interface Observation {
+  label: string;
+  value: string;
+  status: 'available' | 'disabled';
+}
+
+interface DatedPost extends Resolved<Entry> {
+  seal: string;
+  iso: string;
+}
+
+interface Props {
+  lang: Lang;
+  posts: Resolved<Entry>[];
+  projects: ResolvedProject[];
+  featuredPosts: Resolved<Entry>[];
+  recentPosts: DatedPost[];
+}
+
+type TabKey = 'featured' | 'articles' | 'projects' | 'life' | 'activity';
+
+const { lang, posts, projects, featuredPosts, recentPosts } = Astro.props;
+const tabKeys: TabKey[] = ['featured', 'articles', 'projects', 'life', 'activity'];
+const labels: Record<TabKey, string> =
+  lang === 'zh'
+    ? {
+        featured: '精选',
+        articles: '文章',
+        projects: '项目',
+        life: '生活',
+        activity: '动态',
+      }
+    : {
+        featured: 'Featured',
+        articles: 'Writing',
+        projects: 'Projects',
+        life: 'Life',
+        activity: 'Activity',
+      };
+
+const archiveLabel = lang === 'zh' ? '浏览写作归档' : 'Browse the writing archive';
+const emptyLabel = lang === 'zh' ? '还没有写下任何东西。' : 'Nothing written yet.';
+const fallbackLabel = lang === 'zh' ? '英文原文' : 'Chinese original';
+const projectFallbackLabel = lang === 'zh' ? '仅英文' : 'Chinese only';
+const allProjectsLabel = lang === 'zh' ? '查看全部项目' : 'View all projects';
+const kindLabels =
+  lang === 'zh'
+    ? { tech: '技术', read: '阅读', life: '生活', project: '项目' }
+    : { tech: 'Tech', read: 'Reading', life: 'Life', project: 'Project' };
+
+const isArticle = (post: Resolved<Entry>) => post.entry.data.kind === 'tech' || post.entry.data.kind === 'read';
+
+type DisplaySource = Resolved<Entry> & Partial<Pick<DatedPost, 'seal' | 'iso'>>;
+
+const toDisplay = (post: DisplaySource) => ({
+  slug: post.slug,
+  href: `/${post.entryLang}/posts/${post.slug}/`,
+  title: post.entry.data.title,
+  description: post.entry.data.description,
+  kind: post.entry.data.kind,
+  isFallback: post.isFallback,
+  seal: post.seal ?? sealDate(post.entry.data.pubDate),
+  iso: post.iso ?? isoDate(post.entry.data.pubDate),
+});
+
+const featuredRows = featuredPosts.map(toDisplay);
+const featuredProjects = projects.filter((project) => project.entry.data.featured);
+
+const stats: StatsSnapshot = generatedStats;
+const unavailableLabel = lang === 'zh' ? '尚未启用' : 'Not enabled yet';
+const activityObservations: Observation[] = [];
+
+const writingAvailable = PUBLIC_STATS.writing && stats.writing.available && stats.writing.publishedCount > 0;
+if (PUBLIC_STATS.writing) {
+  activityObservations.push({
+    label: lang === 'zh' ? '已发布写作' : 'Published writing',
+    value: writingAvailable ? `${stats.writing.publishedCount}${lang === 'zh' ? ' 篇' : ' posts'}` : unavailableLabel,
+    status: writingAvailable ? 'available' : 'disabled',
+  });
+}
+
+const githubContributionCount = stats.github.days.reduce((sum, day) => sum + day.count, 0);
+const githubAvailable = PUBLIC_STATS.github && stats.github.available && githubContributionCount > 0;
+if (PUBLIC_STATS.github) {
+  activityObservations.push({
+    label: 'GitHub',
+    value: githubAvailable ? `${githubContributionCount}` : unavailableLabel,
+    status: githubAvailable ? 'available' : 'disabled',
+  });
+}
+
+const editorTimeAvailable = PUBLIC_STATS.editorTime && stats.editorTime.available && stats.editorTime.totalMinutes > 0;
+if (PUBLIC_STATS.editorTime) {
+  activityObservations.push({
+    label: lang === 'zh' ? '已记录的编辑器时长' : 'Recorded editor time',
+    value: editorTimeAvailable
+      ? `${stats.editorTime.totalMinutes}${lang === 'zh' ? ' 分钟' : ' minutes'}`
+      : unavailableLabel,
+    status: editorTimeAvailable ? 'available' : 'disabled',
+  });
+}
+
+const visitsAvailable =
+  PUBLIC_STATS.visits && stats.visits.available && (stats.visits.totalViews > 0 || stats.visits.totalUniques > 0);
+if (PUBLIC_STATS.visits) {
+  activityObservations.push({
+    label: lang === 'zh' ? '访问统计' : 'Visits',
+    value: visitsAvailable
+      ? `${stats.visits.totalViews}${lang === 'zh' ? ' 次浏览' : ' views'} · ${stats.visits.totalUniques}${lang === 'zh' ? ' 位访客' : ' uniques'}`
+      : unavailableLabel,
+    status: visitsAvailable ? 'available' : 'disabled',
+  });
+}
+// Keep the homepage's recent limit and date formatting, while the Writing tab
+// only shows the article kinds that belong there. The archive remains the path
+// to every older entry.
+const articleRows = recentPosts.filter(isArticle).map(toDisplay);
+const lifeRows = posts.filter((post) => post.entry.data.kind === 'life').map(toDisplay);
+
+const initialTab = (() => {
+  const value = Astro.url.searchParams.get('tab');
+  return value && tabKeys.includes(value as TabKey) ? (value as TabKey) : 'featured';
+})();
+
+const idPrefix = `home-tabs-${lang}`;
+const tabId = (key: TabKey) => `${idPrefix}-tab-${key}`;
+const panelId = (key: TabKey) => `${idPrefix}-panel-${key}`;
+const headingId = (key: TabKey) => `${idPrefix}-heading-${key}`;
+---
+
+<div class="home-tabs" data-home-tabs data-initial-tab={initialTab}>
+  <div
+    class="tablist"
+    role="tablist"
+    aria-label={lang === 'zh' ? '首页内容' : 'Home sections'}
+  >
+    {tabKeys.map((key) => (
+      <button
+        id={tabId(key)}
+        class="tab"
+        type="button"
+        role="tab"
+        data-tab={key}
+        aria-controls={panelId(key)}
+        aria-selected={initialTab === key ? 'true' : 'false'}
+        tabindex={initialTab === key ? '0' : '-1'}
+      >
+        {labels[key]}
+      </button>
+    ))}
+  </div>
+
+  <div class="panels">
+    <section
+      id={panelId('featured')}
+      class="panel"
+      role="tabpanel"
+      data-tabpanel="featured"
+      aria-labelledby={tabId('featured')}
+      tabindex="0"
+      data-reveal
+    >
+      <h2 id={headingId('featured')} class="section-title">{labels.featured}</h2>
+      {
+        featuredRows.length === 0 && featuredProjects.length === 0 ? (
+          <div class="empty-state">
+            <p class="empty">{emptyLabel}</p>
+            <a href={`/${lang}/archive/`}>{archiveLabel}</a>
+          </div>
+        ) : (
+          <ul class="cards">
+            {featuredRows.map((post) => (
+              <li class="card">
+                <a href={post.href} transition:name={`title-${post.slug}`}>
+                  {post.title}
+                </a>
+                <p class="card-desc">{post.description}</p>
+                {post.isFallback && <span class="fallback">{fallbackLabel}</span>}
+              </li>
+            ))}
+            {featuredProjects.map((project) => (
+              <li class="card">
+                <a href={project.href}>{project.entry.data.title}</a>
+                <p class="card-desc">{project.entry.data.summary}</p>
+                {project.isFallback && <span class="fallback">{projectFallbackLabel}</span>}
+              </li>
+            ))}
+          </ul>
+        )
+      }
+    </section>
+
+    <section
+      id={panelId('articles')}
+      class="panel"
+      role="tabpanel"
+      data-tabpanel="articles"
+      aria-labelledby={tabId('articles')}
+      tabindex="0"
+      data-reveal
+    >
+      <h2 id={headingId('articles')} class="section-title">{labels.articles}</h2>
+      {
+        articleRows.length === 0 ? (
+          <div class="empty-state">
+            <p class="empty">{emptyLabel}</p>
+            <a href={`/${lang}/archive/`}>{archiveLabel}</a>
+          </div>
+        ) : (
+          <ul class="stream">
+            {articleRows.map((post) => (
+              <li class="stream-row">
+                <div class="row-head">
+                  <a href={post.href}>{post.title}</a>
+                  <time class="date mono" datetime={post.iso}>{post.seal}</time>
+                </div>
+                <p class="row-meta">
+                  <span>{kindLabels[post.kind]}</span>
+                  {post.isFallback && <span class="fallback">{fallbackLabel}</span>}
+                </p>
+                <p class="row-desc">{post.description}</p>
+              </li>
+            ))}
+          </ul>
+        )
+      }
+      <p class="panel-link"><a href={`/${lang}/archive/`}>{archiveLabel}</a></p>
+    </section>
+
+    <section
+      id={panelId('projects')}
+      class="panel"
+      role="tabpanel"
+      data-tabpanel="projects"
+      aria-labelledby={tabId('projects')}
+      tabindex="0"
+      data-reveal
+    >
+      <h2 id={headingId('projects')} class="section-title">{labels.projects}</h2>
+      {
+        projects.length === 0 ? (
+          <div class="empty-state">
+            <p class="empty">
+              {lang === 'zh' ? '还没有公开的项目记录。' : 'No reviewed project notes yet.'}
+            </p>
+          </div>
+        ) : (
+          <ul class="cards">
+            {projects.map((project) => (
+              <li class="card paper-surface" data-lift>
+                <a href={project.href}>{project.entry.data.title}</a>
+                <p class="card-desc">{project.entry.data.summary}</p>
+                <p class="row-meta">{project.entry.data.status} · {project.entry.data.role}</p>
+                {project.isFallback && <span class="fallback">{projectFallbackLabel}</span>}
+              </li>
+            ))}
+          </ul>
+        )
+      }
+      <p class="panel-link"><a href={`/${lang}/projects/`}>{allProjectsLabel}</a></p>
+    </section>
+
+    <section
+      id={panelId('life')}
+      class="panel"
+      role="tabpanel"
+      data-tabpanel="life"
+      aria-labelledby={tabId('life')}
+      tabindex="0"
+      data-reveal
+    >
+      <h2 id={headingId('life')} class="section-title">{labels.life}</h2>
+      {
+        lifeRows.length === 0 ? (
+          <div class="empty-state">
+            <p class="empty">{emptyLabel}</p>
+            <a href={`/${lang}/archive/`}>{archiveLabel}</a>
+          </div>
+        ) : (
+          <ul class="life-list">
+            {lifeRows.map((post) => (
+              <li class="life-row">
+                <div class="row-head">
+                  <a href={post.href}>{post.title}</a>
+                  <time class="date mono" datetime={post.iso}>{post.seal}</time>
+                </div>
+                <p class="row-desc">{post.description}</p>
+              </li>
+            ))}
+          </ul>
+        )
+      }
+    </section>
+
+    <section
+      id={panelId('activity')}
+      class="panel"
+      role="tabpanel"
+      data-tabpanel="activity"
+      aria-labelledby={tabId('activity')}
+      tabindex="0"
+      data-reveal
+    >
+      <h2 id={headingId('activity')} class="section-title">{labels.activity}</h2>
+      {
+        activityObservations.length === 0 ? (
+          <div class="empty-state">
+            <p class="empty">{lang === 'zh' ? '动态统计尚未启用。' : 'Activity statistics are not enabled yet.'}</p>
+            <a href={`/${lang}/archive/`}>{archiveLabel}</a>
+          </div>
+        ) : (
+          <>
+            <dl class="observations">
+              {activityObservations.map((observation) => <ObservationRow {...observation} />)}
+            </dl>
+            {writingAvailable && (
+              <InkHeatmap
+                days={stats.writing.days}
+                title={lang === 'zh' ? '写作热度' : 'Writing activity'}
+                tableLabel={lang === 'zh' ? '按日期查看写作数量' : 'Writing count by date'}
+              />
+            )}
+          </>
+        )
+      }
+    </section>
+  </div>
+</div>
+
+<style>
+  .home-tabs {
+    max-width: var(--measure);
+    margin-inline: auto;
+    padding: var(--s2) var(--s1) var(--s1);
+    background: linear-gradient(
+      to bottom,
+      transparent,
+      color-mix(in srgb, var(--paper) 84%, transparent) var(--s2),
+      color-mix(in srgb, var(--paper) 92%, transparent) var(--s4)
+    );
+  }
+
+  .tablist {
+    display: flex;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: var(--s1);
+  }
+
+  .tab {
+    appearance: none;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: transparent;
+    color: var(--pencil);
+    cursor: pointer;
+    font: inherit;
+    line-height: 1.3;
+    padding: 0.55rem 0.8rem 0.5rem;
+    text-align: left;
+  }
+
+  .tab:first-child {
+    padding-left: 0.2rem;
+  }
+
+  .tab:hover {
+    color: var(--ink-strong);
+  }
+
+  .tab[aria-selected='true'] {
+    border-bottom-color: var(--ink-strong);
+    color: var(--ink-strong);
+  }
+
+  .tab:focus-visible {
+    outline: 2px solid var(--stamp);
+    outline-offset: -2px;
+  }
+
+  .panel {
+    padding-block: var(--s1);
+  }
+
+  .panel:focus-visible {
+    outline: 2px solid var(--stamp);
+    outline-offset: 0.25rem;
+  }
+
+  .section-title {
+    font-size: var(--fs-h3);
+    margin-bottom: 0.75rem;
+  }
+
+  .cards,
+  .stream,
+  .life-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .cards {
+    border-top: 1px solid var(--rule);
+  }
+
+  .card {
+    border-bottom: 1px solid var(--rule);
+    padding: var(--s1) 0;
+  }
+
+  .card > a {
+    color: var(--ink-strong);
+    display: inline-block;
+    font-size: var(--fs-h3);
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .card > a:hover,
+  .row-head a:hover,
+  .panel-link a:hover,
+  .empty-state a:hover {
+    text-decoration: underline;
+    text-decoration-color: var(--stamp);
+  }
+
+  .card-desc,
+  .row-desc {
+    color: var(--ink-faded);
+    font-size: var(--fs-sm);
+    line-height: 1.6;
+    margin-top: 0.4rem;
+  }
+
+  .stream-row,
+  .life-row {
+    border-bottom: 1px solid var(--rule);
+    padding-block: 0.65rem;
+  }
+
+  .stream-row:last-child,
+  .life-row:last-child {
+    border-bottom: 0;
+  }
+
+  .row-head {
+    align-items: baseline;
+    display: flex;
+    gap: var(--s1);
+    justify-content: space-between;
+  }
+
+  .row-head a {
+    color: var(--ink-strong);
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .date {
+    color: var(--pencil);
+    flex: none;
+    font-size: var(--fs-sm);
+  }
+
+  .row-meta {
+    color: var(--pencil);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    margin-top: 0.3rem;
+  }
+
+  .fallback {
+    color: var(--stamp);
+    font-size: var(--fs-xs);
+    margin-left: 0.6rem;
+  }
+
+  .empty-state {
+    border-top: 1px solid var(--rule);
+    padding-top: 0.8rem;
+  }
+
+  .empty {
+    color: var(--pencil);
+    margin: 0 0 0.55rem;
+  }
+
+  .empty-state a,
+  .panel-link a {
+    color: var(--ink);
+  }
+
+  .panel-link {
+    margin-top: var(--s1);
+  }
+
+  @media (max-width: 36rem) {
+    .tab {
+      padding-inline: 0.55rem;
+    }
+
+    .tab:first-child {
+      padding-left: 0.1rem;
+    }
+
+    .row-head {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+
+    .date {
+      order: -1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tab:focus-visible,
+    .panel:focus-visible {
+      transition: none;
+    }
+  }
+</style>
+
+<script>
+  const TAB_KEYS = ['featured', 'articles', 'projects', 'life', 'activity'] as const;
+  type TabKey = (typeof TAB_KEYS)[number];
+  type ApplyOptions = { updateUrl?: boolean; focus?: boolean };
+
+  const HOME_TABS_SELECTOR = '[data-home-tabs]';
+  const LIFE_CYCLE_MARKER = 'data-home-tabs-lifecycle';
+
+  const isTabKey = (value: unknown): value is TabKey =>
+    typeof value === 'string' && TAB_KEYS.includes(value as TabKey);
+
+  const tabFromLocation = (): TabKey => {
+    const value = new URL(window.location.href).searchParams.get('tab');
+    return isTabKey(value) ? value : 'featured';
+  };
+
+  const writeTabToLocation = (value: TabKey): void => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', value);
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+  };
+
+  const applyTab = (root: HTMLElement, value: unknown, { updateUrl = false, focus = false }: ApplyOptions = {}): void => {
+    const selected: TabKey = isTabKey(value) ? value : 'featured';
+    root.setAttribute('data-home-tabs-enhanced', '');
+
+    const tabs = Array.from(root.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+    const panels = Array.from(root.querySelectorAll<HTMLElement>('[role="tabpanel"]'));
+
+    tabs.forEach((tab) => {
+      const active = tab.dataset.tab === selected;
+      tab.setAttribute('aria-selected', String(active));
+      tab.tabIndex = active ? 0 : -1;
+      if (focus && active) tab.focus();
+    });
+
+    panels.forEach((panel) => {
+      const active = panel.dataset.tabpanel === selected;
+      panel.hidden = !active;
+      panel.setAttribute('aria-hidden', String(!active));
+    });
+
+    if (updateUrl) writeTabToLocation(selected);
+  };
+
+  const initRoot = (root: HTMLElement): void => {
+    if (root.dataset.homeTabsInitialized !== 'true') {
+      root.dataset.homeTabsInitialized = 'true';
+      const tabs = Array.from(root.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+
+      tabs.forEach((tab) => {
+        tab.addEventListener('click', () => {
+          applyTab(root, tab.dataset.tab, { updateUrl: true });
+        });
+
+        tab.addEventListener('keydown', (event) => {
+          const key = event.key;
+          const current = tabs.indexOf(tab);
+          let next = current;
+
+          if (key === 'ArrowRight') next = (current + 1) % tabs.length;
+          else if (key === 'ArrowLeft') next = (current - 1 + tabs.length) % tabs.length;
+          else if (key === 'Home') next = 0;
+          else if (key === 'End') next = tabs.length - 1;
+          else if (key === 'Enter' || key === ' ') {
+            event.preventDefault();
+            applyTab(root, tab.dataset.tab, { updateUrl: true, focus: true });
+            return;
+          } else return;
+
+          event.preventDefault();
+          applyTab(root, tabs[next]?.dataset.tab, { updateUrl: true, focus: true });
+        });
+      });
+    }
+
+    applyTab(root, tabFromLocation());
+  };
+
+  const initAll = (): void => {
+    document.querySelectorAll<HTMLElement>(HOME_TABS_SELECTOR).forEach((element) => {
+      initRoot(element);
+    });
+  };
+
+  if (!document.documentElement.hasAttribute(LIFE_CYCLE_MARKER)) {
+    document.documentElement.setAttribute(LIFE_CYCLE_MARKER, '');
+    window.addEventListener('popstate', initAll);
+    document.addEventListener('astro:page-load', initAll);
+  }
+
+  initAll();
+</script>

@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "publicReady": false,
+  "mode": "keyword",
+  "generatedAt": "2026-09-08T05:35:04.158Z",
+  "chunks": [
+    {
+      "id": "posts:zh:giving-deepseek-eyes#1",
+      "lang": "zh",
+      "title": "给 DeepSeek 补上眼睛",
+      "url": "/zh/posts/giving-deepseek-eyes",
+      "text": "给 DeepSeek 补上眼睛\n\nDeepSeek 没有视觉能力。deepsee 用双协议代理在不改任何调用方代码的前提下给它接上眼睛——一个关于「在哪一层解决问题」的决定。\n\nDeepSeek 的文本能力足够好，价格也足够低，但它读不了图。我手边一堆需要看截图的活儿——报错界面、论文里的图表、RViz 的可视化——都得先换个模型。\n\ndeepsee 是为了消掉这次切换而写的。核心决定只有一个：在哪一层补上这只眼睛。\n三个可选的层，我选了最下面那个\n\n在应用层补。 每个用到图片的地方自己判断\"这是图吗\"，是就调另一个视觉模型。最直接，也最糟——每个调用点都要改，而且每个都会改得不一样。\n\n在 SDK 层补。 包一层客户端，暴露 chatwithimage()。比上一个好，但要求所有调用方都换成我的客户端。已经在跑的 CLI、编辑器插件、别人写的脚本，全都不吃这一套。\n\n在协议层补。 做一个兼容 OpenAI 协议的代理：调用方以为自己在跟 DeepSeek 说话，代理发现请求里带图片就把这部分转给视觉模型，把结果作为文本注入回上下文，再交给 DeepSeek 续写。\n\n我选了第三个，因为它满足一个我认为最重要的条件：调用方一行代码都不用改。 只需要把 baseurl 指过来。\n\n应用 / CLI / 编辑器插件\n        │  以为在调 DeepSeek\n        ▼\n   deepsee 代理  ──有图？──▶  视觉模型（GLM-4V / Qwen-VL / …）\n        │                          │\n        │◀────── 图片描述文本 ───────┘\n        ▼\n     DeepSeek  ──▶  最终回答\n为什么是\"双协议\"\n\n只兼容 OpenAI 协议不够。Anthropic 的 /v1/messages 协议和 OpenAI 的 /v1/chat/completions 在图片的表示上不一样：\n\n- OpenAI：content 数组里放 {\"type\": \"imageurl\", \"imageurl\": {\"url\": ...}}\n- Anthropic：content 数组里放 {\"type\": \"image\", \"source\": {\"type\": \"base64\", ...}}\n\n而我要接的客户端里两种都有。所以代理同时监听两套路由，各自解析后归一化成同一个内部表示，再走同一条视觉处理管线。多写的代码不多，换来的是\"任何客户端都能接\"。\n零依赖不是洁癖\n\ndeepsee 只用 Python 标准库。这不是为了炫技，是三个具体的理由：\n\n1. 它要装在别人机器上。 一个 pip install deepsee 如果拖进来 20 个包，就会和对方已有的环境打架。我自己就"
+    },
+    {
+      "id": "posts:zh:giving-deepseek-eyes#2",
+      "lang": "zh",
+      "title": "给 DeepSeek 补上眼睛",
+      "url": "/zh/posts/giving-deepseek-eyes",
+      "text": "接\"。\n零依赖不是洁癖\n\ndeepsee 只用 Python 标准库。这不是为了炫技，是三个具体的理由：\n\n1. 它要装在别人机器上。 一个 pip install deepsee 如果拖进来 20 个包，就会和对方已有的环境打架。我自己就被 httpx 版本冲突坑过。\n2. 它要能塞进 Docker 镜像。 我的 ROS 容器已经 6GB 了，不想为了一个代理再加一层依赖。\n3. 协议转发不需要重量级框架。 http.server + urllib + json 已经足够；代价是并发、流式转发和错误边界都要自己明确处理。\n四种接入方式\n\n同一个内核，四个入口：\n\n| 入口 | 场景 |\n|---|---|\n| CLI | 手动跑一张图，deepsee see shot.png -q \"这报的什么错\" |\n| 代理 | 已有应用改 baseurl 即可 |\n| MCP server | 给支持 MCP 的 Agent 当工具用 |\n| Hook | 挂在编辑器/终端流程里自动触发 |\n\nMCP 那个入口是后加的，因为我自己在用的 Agent 支持 MCP，而 MCP 的语义（\"这是一个可调用的工具\"）比代理的语义（\"我假装是另一个模型\"）更诚实。能用 MCP 的场合我更推荐用 MCP。\n供应商配置是抄不来的经验\n\n视觉模型这块我列了十几家，每家的 baseurl 和模型名都不一样，而且免费额度差别巨大。配置长这样：\n\n\"zhipu\": {\n    \"baseurl\": \"https://open.bigmodel.cn/api/paas/v4\",\n    \"model\": \"glm-4v-flash\",\n    \"maxtokens\": 1024,  # glm-4v-flash 上限就是 1024，写大了会被拒\n},\n\n那行注释是花了半小时才写上的——maxtokens 设成 2048 时接口返回的错误信息没有指出是哪个参数越界。这类「知道了就一分钱不值，不知道就卡半小时」的事，是我现在写注释的主要动机。\n\n默认推荐智谱的 glm-4v-flash，因为项目当前把它配置为可零成本试用的预设。这里的免费额度和调用限制属于供应商政策，随时可能变化，应以平台的最新说明为准。\n100 多个测试测的是什么\n\n不测\"模型答得对不对\"——那不稳定，也不是我的职责。测的是：\n\n- 两种协议的请求解析（含畸形输入）\n- 图片引用的四种形式：本地路径、URL、base64、data URI\n- 供应商配置缺字段时的报错是否可读\n- 流式转发中途断连时会释放连接\n- 静态文件服务拒绝 ../ 目录穿越\n- 下载网络图片时拦截指向内网地址的 SSRF\n- 代理鉴权、CSRF 来源检查与配置中的密钥脱敏\n现在回头看\n\n值得的部分是选对了层。协议层这个决定让同一套视觉转换逻辑能服务"
+    },
+    {
+      "id": "posts:zh:giving-deepseek-eyes#3",
+      "lang": "zh",
+      "title": "给 DeepSeek 补上眼睛",
+      "url": "/zh/posts/giving-deepseek-eyes",
+      "text": "中途断连时会释放连接\n- 静态文件服务拒绝 ../ 目录穿越\n- 下载网络图片时拦截指向内网地址的 SSRF\n- 代理鉴权、CSRF 来源检查与配置中的密钥脱敏\n现在回头看\n\n值得的部分是选对了层。协议层这个决定让同一套视觉转换逻辑能服务 CLI、代理、MCP 和 Hook，而不用把图片处理散落到每个调用方。\n\n不值得的部分是双协议来得太早。最初设计时我顺手实现了两套协议，但早期大部分场景只用到了 OpenAI 那套；Anthropic 协议直到接入特定客户端流程时才真正派上用场。这属于典型的“预判了一个真实但不紧急的需求”，代价是早期迭代变慢。\n\n如果重来，我会先只做 OpenAI 协议，把代理跑通、跑稳，再加第二套。"
+    },
+    {
+      "id": "projects:zh:deepsee",
+      "lang": "zh",
+      "title": "deepsee",
+      "url": "/zh/projects/deepsee",
+      "text": "deepsee\n\n问题\n\n已有调用方通常只认识文本接口，直接在每个应用里加入视觉处理会造成重复改动。\n过程\n\n现有文章草稿描述了协议层视觉桥、CLI、Web、MCP 与兼容代理。公开前需要再次核对仓库当前能力。\n结果与复盘\n\n本页不承诺尚未验证的兼容范围或性能指标；最终内容以逐项审核结果为准。"
+    }
+  ]
+}

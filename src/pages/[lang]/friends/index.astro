@@ -1,0 +1,136 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { assertLang, langPaths } from '../../../lib/content';
+import { loadFriends } from '../../../lib/site-content';
+
+export function getStaticPaths() {
+  return langPaths();
+}
+
+const lang = assertLang(Astro.params.lang);
+const friends = await loadFriends();
+const title = lang === 'zh' ? '友链' : 'Friends';
+const intro =
+  lang === 'zh'
+    ? '一些值得慢慢访问的站点。'
+    : 'A few sites worth visiting slowly.';
+const empty = lang === 'zh' ? '友链还没有准备好。' : 'The friends list is not ready yet.';
+---
+
+<BaseLayout lang={lang} title={title}>
+  <main id="main" class="page">
+    <div class="sheet sheet--ruled">
+      <aside class="margin" aria-label={lang === 'zh' ? '友链数量' : 'Friend count'}>
+        <p class="count mono">{String(friends.length).padStart(2, '0')}</p>
+        <p class="mono">{lang === 'zh' ? '站点' : 'sites'}</p>
+      </aside>
+
+      <div class="content paper-surface">
+        <header class="heading">
+          <p class="eyebrow">{lang === 'zh' ? '互相访问' : 'RECIPROCAL VISITS'}</p>
+          <h1>{title}</h1>
+          <p class="intro">{intro}</p>
+        </header>
+
+        {
+          friends.length === 0 ? (
+            <p class="empty" role="status">{empty}</p>
+          ) : (
+            <ul class="friend-list">
+              {friends.map((friend, index) => {
+                const data = friend.data;
+                return (
+                  <li class="friend-item" data-reveal>
+                    <article>
+                      {data.avatar && <img class="avatar" src={data.avatar} alt="" loading="lazy" />}
+                      <div class="friend-body">
+                        <h2 id={`friend-${index}-name`}>
+                          <a href={data.url} target="_blank" rel="noopener noreferrer">
+                            {data.name}
+                          </a>
+                        </h2>
+                        <p>{data.description}</p>
+                      </div>
+                    </article>
+                  </li>
+                );
+              })}
+            </ul>
+          )
+        }
+      </div>
+    </div>
+  </main>
+</BaseLayout>
+
+<style>
+  .content {
+    padding: var(--s2);
+  }
+
+  .heading {
+    padding-bottom: var(--s2);
+    border-bottom: 1px solid var(--rule);
+  }
+
+  h1 {
+    margin-block: 0.35rem 0;
+    font-size: var(--fs-h1);
+  }
+
+  .intro,
+  .empty {
+    color: var(--ink-faded);
+  }
+
+  .count {
+    color: var(--stamp);
+    font-size: var(--fs-lg);
+  }
+
+  .friend-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .friend-item {
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .friend-item:last-child {
+    border-bottom: 0;
+  }
+
+  .friend-item article {
+    display: grid;
+    grid-template-columns: 4rem minmax(0, 1fr);
+    gap: var(--s1);
+    align-items: start;
+    padding-block: var(--s2);
+  }
+
+  .avatar {
+    display: block;
+    width: 4rem;
+    height: 4rem;
+    object-fit: cover;
+    border: 1px solid var(--rule);
+  }
+
+  h2 {
+    margin: 0;
+    font-size: var(--fs-h3);
+  }
+
+  .friend-body p {
+    margin: 0.35rem 0 0;
+    color: var(--ink-faded);
+  }
+
+  @media (max-width: 42rem) {
+    .content {
+      padding: var(--s1);
+    }
+  }
+</style>

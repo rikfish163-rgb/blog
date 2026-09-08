@@ -1,0 +1,51 @@
+{
+  "name": "blog",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.0.0",
+  "description": "blog by Hetaisheng, HUST",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "assets": "node scripts/setup-fonts.mjs && node scripts/process-images.mjs",
+    "images": "node scripts/process-images.mjs",
+    "dev": "pnpm assets && astro dev",
+    "build": "pnpm assets && pnpm stats && pnpm ai:index && astro build",
+    "preview": "astro preview",
+    "check": "astro check",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "verify": "node scripts/check-build.mjs",
+    "stats": "node scripts/fetch-stats.mjs",
+    "ai:index": "node scripts/build-ai-index.mjs"
+  },
+  "dependencies": {
+    "@astrojs/markdown-remark": "7.3.0",
+    "@astrojs/markdown-satteri": "0.4.0",
+    "@astrojs/mdx": "8.0.0",
+    "@astrojs/node": "11.1.5",
+    "@astrojs/rss": "4.0.19",
+    "@astrojs/sitemap": "3.7.4",
+    "@fontsource/ia-writer-quattro": "5.3.0",
+    "@fontsource/ibm-plex-mono": "5.3.0",
+    "@fontsource/ma-shan-zheng": "5.3.1",
+    "astro": "7.2.10",
+    "astro-expressive-code": "0.44.2",
+    "astro-pagefind": "2.0.1",
+    "better-auth": "1.7.3",
+    "better-sqlite3": "13.0.3",
+    "katex": "0.18.5",
+    "lxgw-wenkai-screen-webfont": "1.7.0",
+    "rehype-katex": "7.0.1",
+    "remark-math": "6.0.0",
+    "sharp": "^0.35.4"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "@types/better-sqlite3": "7.6.13",
+    "typescript": "^6.0.3",
+    "vitest": "4.1.11"
+  }
+}

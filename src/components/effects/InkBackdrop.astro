@@ -1,0 +1,19 @@
+---
+/**
+ * 流动墨渐变背景。
+ *
+ * 三块柔和 radial-gradient 色块，只做 transform 动画；上面盖一层 SVG 颗粒。
+ * 关键工程决策见 styles/motion.css：不动 gradient 色标（每帧全屏重绘），
+ * 不用 filter: blur()（大面积模糊在低端 GPU 上同样昂贵）。
+ *
+ * transition:persist 让这一层在 SPA 导航时不被替换，配合 scripts/motion.ts 里
+ * 的相位续播，视觉上就是一层始终在缓慢流动的墨，而不是每次翻页都重新开始。
+ */
+---
+
+<div class="ink-backdrop" aria-hidden="true" transition:persist="ink-backdrop">
+  <div class="ink-backdrop__blob ink-backdrop__blob--1" data-ink-blob></div>
+  <div class="ink-backdrop__blob ink-backdrop__blob--2" data-ink-blob></div>
+  <div class="ink-backdrop__blob ink-backdrop__blob--3" data-ink-blob></div>
+  <div class="ink-backdrop__grain"></div>
+</div>

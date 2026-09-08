@@ -1,0 +1,349 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import AccountActions from '../../../components/AccountActions.astro';
+import { auth, canUnlinkAccount, getOAuthProviderStatuses } from '../../../auth';
+import { assertLang } from '../../../lib/content';
+
+export const prerender = false;
+
+const lang = assertLang(Astro.params.lang);
+const authAiVisible = import.meta.env.DEV || import.meta.env.PUBLIC_ENABLE_AUTH_AI === 'true';
+if (!authAiVisible) return Astro.redirect(`/${lang}/search/`, 302);
+const user = Astro.locals.user;
+const session = Astro.locals.session;
+const isSignedIn = user !== null && session !== null;
+
+interface LinkedAccount {
+  id: string;
+  providerId: string;
+}
+
+let accounts: LinkedAccount[] = [];
+if (isSignedIn) {
+  try {
+    const linked = await auth.api.listUserAccounts({ headers: Astro.request.headers });
+    accounts = linked.map(({ id, providerId }) => ({ id, providerId }));
+  } catch {
+    accounts = [];
+  }
+}
+
+const providerStatuses = getOAuthProviderStatuses();
+const accountNotLinked = Astro.url.searchParams.get('error') === 'account_not_linked';
+const expiresAt = session?.expiresAt instanceof Date ? session.expiresAt.toLocaleString(lang === 'zh' ? 'zh-CN' : 'en-US') : null;
+const pageTitle = lang === 'zh' ? '账号' : 'Account';
+const pageDescription = lang === 'zh' ? '管理登录会话与已绑定渠道。' : 'Manage your session and linked sign-in providers.';
+---
+
+<BaseLayout lang={lang} title={pageTitle} description={pageDescription} current="account">
+  <main id="main" class="account-page">
+    <header class="account-heading">
+      <p class="eyebrow">{lang === 'zh' ? '账号' : 'ACCOUNT'}</p>
+      <h1>{pageTitle}</h1>
+      <p>{pageDescription}</p>
+    </header>
+
+    {
+      accountNotLinked && (
+        <p class="account-error" role="alert">
+          {lang === 'zh'
+            ? '该渠道已属于其他账号，请先登录原账号，再从账号页显式绑定。'
+            : 'This provider belongs to another account. Sign in to that account first, then link it explicitly.'}
+        </p>
+      )
+    }
+    <p class="account-status" data-account-status role="status" hidden></p>
+
+    <section class="account-card" aria-labelledby="session-title">
+      <div class="section-heading">
+        <h2 id="session-title">{lang === 'zh' ? '当前会话' : 'Current session'}</h2>
+        {
+          isSignedIn ? (
+            <span class="state state-active">{lang === 'zh' ? '已登录' : 'Signed in'}</span>
+          ) : (
+            <span class="state">{lang === 'zh' ? '未登录' : 'Signed out'}</span>
+          )
+        }
+      </div>
+      {
+        isSignedIn && user && session ? (
+          <dl class="session-details">
+            <div>
+              <dt>{lang === 'zh' ? '账号' : 'Account'}</dt>
+              <dd>{user.email}</dd>
+            </div>
+            <div>
+              <dt>{lang === 'zh' ? '会话到期' : 'Session expires'}</dt>
+              <dd>{expiresAt ?? (lang === 'zh' ? '未知' : 'Unknown')}</dd>
+            </div>
+          </dl>
+        ) : (
+          <p class="muted">
+            {lang === 'zh' ? '登录后可在这里管理绑定渠道。' : 'Sign in to manage your linked providers here.'}
+          </p>
+        )
+      }
+      {
+        isSignedIn && (
+          <button type="button" class="button button-quiet" data-auth-action="signout">
+            {lang === 'zh' ? '退出登录' : 'Sign out'}
+          </button>
+        )
+      }
+    </section>
+
+    <section class="account-card" aria-labelledby="providers-title">
+      <div class="section-heading">
+        <h2 id="providers-title">{lang === 'zh' ? '登录渠道' : 'Sign-in providers'}</h2>
+        <span class="muted">{lang === 'zh' ? '显式绑定' : 'Explicit linking'}</span>
+      </div>
+      <ul class="provider-list">
+        {
+          providerStatuses.map((provider) => {
+            const linkedAccount = accounts.find((account) => account.providerId === provider.id);
+            const action = isSignedIn ? 'link' : 'login';
+            return (
+              <li class="provider-row">
+                <div>
+                  <h3>{provider.name}</h3>
+                  <p class="provider-id">{provider.id}</p>
+                </div>
+                <div class="provider-action">
+                  {
+                    linkedAccount ? (
+                      <>
+                        <span class="state state-active">{lang === 'zh' ? '已绑定' : 'Linked'}</span>
+                        <button
+                          type="button"
+                          class="button button-quiet"
+                          data-auth-action="unlink"
+                          data-account-id={linkedAccount.id}
+                          disabled={!canUnlinkAccount(accounts.length)}
+                          title={
+                            canUnlinkAccount(accounts.length)
+                              ? undefined
+                              : lang === 'zh'
+                                ? '至少保留一个登录渠道'
+                                : 'Keep at least one sign-in provider'
+                          }
+                        >
+                          {lang === 'zh' ? '解绑' : 'Unlink'}
+                        </button>
+                      </>
+                    ) : provider.configured ? (
+                      <button type="button" class="button" data-auth-action={action} data-provider={provider.id}>
+                        {isSignedIn
+                          ? lang === 'zh'
+                            ? '绑定'
+                            : 'Link'
+                          : lang === 'zh'
+                            ? '登录'
+                            : 'Sign in'}
+                      </button>
+                    ) : (
+                      <span class="state">{lang === 'zh' ? '待配置' : 'Not configured'}</span>
+                    )
+                  }
+                </div>
+              </li>
+            );
+          })
+        }
+      </ul>
+      <p class="provider-note">
+        {lang === 'zh'
+          ? '同邮箱不会自动合并；请登录后使用绑定按钮显式关联其他邮箱。'
+          : 'Accounts with the same email are never merged automatically. Sign in first, then use Link to add another email explicitly.'}
+      </p>
+    </section>
+  </main>
+  <AccountActions />
+</BaseLayout>
+
+<style>
+  .account-page {
+    width: min(100% - 2 * var(--s1), 48rem);
+    margin-inline: auto;
+    padding-block: var(--s3) var(--s5);
+  }
+
+  .account-heading {
+    max-width: 36rem;
+    margin-bottom: var(--s2);
+  }
+
+  .account-heading h1 {
+    margin: 0;
+    color: var(--ink-strong);
+    font-size: clamp(2rem, 7vw, 3rem);
+    line-height: var(--lh-tight);
+  }
+
+  .account-heading p:last-child {
+    margin: var(--s1) 0 0;
+    color: var(--ink-faded);
+  }
+
+  .eyebrow {
+    margin: 0 0 0.45rem;
+    color: var(--stamp);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .account-card {
+    margin-top: var(--s2);
+    padding: var(--s2);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-card);
+    background: var(--paper-raised);
+    box-shadow: var(--shadow-raised);
+  }
+
+  .section-heading,
+  .provider-row,
+  .provider-action {
+    display: flex;
+    align-items: center;
+  }
+
+  .section-heading,
+  .provider-row {
+    justify-content: space-between;
+    gap: var(--s1);
+  }
+
+  .section-heading h2,
+  .provider-row h3 {
+    margin: 0;
+    color: var(--ink-strong);
+    font-size: var(--fs-base);
+  }
+
+  .session-details {
+    display: grid;
+    gap: 0.75rem;
+    margin: var(--s1) 0;
+  }
+
+  .session-details div {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--s1);
+  }
+
+  dt,
+  .muted,
+  .provider-id,
+  .provider-note {
+    color: var(--ink-faded);
+    font-size: var(--fs-sm);
+  }
+
+  dd {
+    margin: 0;
+    color: var(--ink);
+    text-align: end;
+    overflow-wrap: anywhere;
+  }
+
+  .provider-list {
+    display: grid;
+    gap: 0;
+    margin: var(--s1) 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .provider-row {
+    padding-block: 0.85rem;
+    border-top: 1px solid var(--rule);
+  }
+
+  .provider-id {
+    margin: 0.15rem 0 0;
+    font-family: var(--font-mono);
+  }
+
+  .provider-action {
+    justify-content: flex-end;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+
+  .state {
+    color: var(--ink-faded);
+    font-size: var(--fs-sm);
+  }
+
+  .state-active {
+    color: var(--stamp);
+  }
+
+  .button {
+    min-height: 2.4rem;
+    padding: 0.45rem 0.85rem;
+    border: 1px solid var(--ink);
+    border-radius: var(--radius);
+    color: var(--paper);
+    background: var(--ink);
+    font: inherit;
+    font-size: var(--fs-sm);
+    cursor: pointer;
+  }
+
+  .button:hover:not(:disabled) {
+    background: var(--ink-strong);
+  }
+
+  .button:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  .button-quiet {
+    color: var(--ink);
+    background: transparent;
+    border-color: var(--rule-strong);
+  }
+
+  .account-error,
+  .account-status {
+    margin: var(--s1) 0;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--stamp);
+    border-radius: var(--radius);
+    color: var(--ink-strong);
+    background: color-mix(in srgb, var(--stamp) 10%, transparent);
+  }
+
+  .account-status[hidden] {
+    display: none;
+  }
+
+  .provider-note {
+    margin: var(--s1) 0 0;
+  }
+
+  @media (max-width: 32rem) {
+    .account-card {
+      padding: var(--s1);
+    }
+
+    .session-details div,
+    .provider-row {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    dd {
+      text-align: start;
+    }
+
+    .provider-action {
+      justify-content: flex-start;
+    }
+  }
+</style>

@@ -1,0 +1,305 @@
+---
+import { render } from 'astro:content';
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { assertLang, postsFor } from '../../../lib/content';
+import { allProjects, type ProjectEntry } from '../../../lib/site-content';
+import { isoDate, readableDate } from '../../../lib/format';
+import type { Lang } from '../../../lib/posts';
+
+interface Props {
+  entry: ProjectEntry;
+}
+
+export async function getStaticPaths() {
+  const entries = await allProjects();
+  return entries.map((entry) => ({
+    params: { lang: entry.data.lang, slug: entry.data.slug },
+    props: { entry },
+  }));
+}
+
+const lang = assertLang(Astro.params.lang);
+const { entry } = Astro.props as Props;
+const { Content } = await render(entry);
+const data = entry.data;
+const posts = await postsFor(lang);
+const relatedPosts = posts.filter(
+  (post) =>
+    post.entry.data.kind === 'project' &&
+    (post.slug === data.slug || post.entry.data.tags.includes(data.slug)),
+);
+const title = data.title;
+const onlyLabel = (entryLang: Lang) => {
+  if (entryLang === 'zh') return lang === 'zh' ? '仅中文' : 'Chinese only';
+  return lang === 'zh' ? '仅英文' : 'English only';
+};
+const label = {
+  role: lang === 'zh' ? '角色' : 'Role',
+  status: lang === 'zh' ? '状态' : 'Status',
+  period: lang === 'zh' ? '周期' : 'Period',
+  stack: lang === 'zh' ? '技术栈' : 'Stack',
+  links: lang === 'zh' ? '相关链接' : 'Links',
+  related: lang === 'zh' ? '相关记录' : 'Related notes',
+  back: lang === 'zh' ? '返回项目' : 'Back to projects',
+  external: lang === 'zh' ? '在新窗口打开' : 'Open in a new window',
+};
+---
+
+<BaseLayout lang={lang} title={title} ogType="article">
+  <main id="main" class="page">
+    <div class="sheet sheet--ruled">
+      <aside class="margin" aria-label={lang === 'zh' ? '项目索引' : 'Project index'}>
+        <a href={`/${lang}/projects/`} class="back">← {label.back}</a>
+      </aside>
+
+      <article class="content paper-surface project-detail">
+        <header class="heading">
+          <p class="eyebrow">{lang === 'zh' ? '项目档案' : 'PROJECT FILE'}</p>
+          <h1>{data.title}</h1>
+          <p class="summary">{data.summary}</p>
+          <dl class="facts">
+            <div><dt>{label.role}</dt><dd>{data.role}</dd></div>
+            <div><dt>{label.status}</dt><dd>{data.status}</dd></div>
+            <div><dt>{label.period}</dt><dd>{data.period}</dd></div>
+          </dl>
+        </header>
+
+        {data.cover && (
+          <figure class="hero-cover">
+            <img src={data.cover} alt={data.title} />
+            <figcaption>{data.title}</figcaption>
+          </figure>
+        )}
+
+        {data.stack.length > 0 && (
+          <section class="details" aria-labelledby="stack-heading">
+            <h2 id="stack-heading">{label.stack}</h2>
+            <ul class="stack">
+              {data.stack.map((item) => <li>{item}</li>)}
+            </ul>
+          </section>
+        )}
+
+        {data.links.length > 0 && (
+          <section class="details" aria-labelledby="links-heading">
+            <h2 id="links-heading">{label.links}</h2>
+            <ul class="links">
+              {data.links.map((link) => (
+                <li>
+                  <a href={link.url} target="_blank" rel="noopener noreferrer">
+                    {link.label}
+                    <span class="sr-only"> ({label.external})</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        <div class="prose">
+          <Content />
+        </div>
+
+        {relatedPosts.length > 0 && (
+          <section class="details related" aria-labelledby="related-heading">
+            <h2 id="related-heading">{label.related}</h2>
+            <ul>
+              {relatedPosts.map((post) => (
+                <li>
+                  <a href={`/${post.entryLang}/posts/${encodeURIComponent(post.slug)}/`}>
+                    {post.entry.data.title}
+                  </a>
+                  {post.isFallback && (
+                    <span class="fallback" lang={post.entryLang === 'zh' ? 'zh-CN' : 'en'}>
+                      {onlyLabel(post.entryLang)}
+                    </span>
+                  )}
+                  <time datetime={isoDate(post.entry.data.pubDate)}>{readableDate(post.entry.data.pubDate, lang)}</time>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+      </article>
+    </div>
+  </main>
+</BaseLayout>
+
+<style>
+  .content {
+    padding: var(--s2);
+  }
+
+  .back {
+    color: var(--ink-faded);
+    font-size: var(--fs-sm);
+    text-decoration-thickness: 1px;
+  }
+
+  .heading {
+    padding-bottom: var(--s2);
+    border-bottom: 1px solid var(--rule);
+  }
+
+  h1 {
+    margin-block: 0.4rem;
+    font-size: var(--fs-display);
+    line-height: var(--lh-heading);
+  }
+
+  .summary {
+    max-width: 52ch;
+    font-size: var(--fs-lg);
+    color: var(--ink-faded);
+  }
+
+  .facts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--s1);
+    margin: var(--s2) 0 0;
+  }
+
+  .facts div {
+    border-top: 1px solid var(--rule);
+    padding-top: 0.45rem;
+  }
+
+  .facts dt {
+    color: var(--pencil);
+    font-size: var(--fs-xs);
+    letter-spacing: var(--ls-wide);
+    text-transform: uppercase;
+  }
+
+  .facts dd {
+    margin: 0.25rem 0 0;
+  }
+
+  .hero-cover {
+    margin: var(--s2) 0;
+  }
+
+  .hero-cover img {
+    display: block;
+    width: 100%;
+    max-height: 28rem;
+    object-fit: cover;
+    border: 1px solid var(--rule);
+  }
+
+  figcaption {
+    margin-top: 0.4rem;
+    color: var(--pencil);
+    font-size: var(--fs-xs);
+  }
+
+  .details {
+    margin-top: var(--s2);
+    padding-top: var(--s1);
+    border-top: 1px solid var(--rule);
+  }
+
+  .details h2 {
+    margin: 0 0 var(--s1);
+    font-size: var(--fs-h3);
+  }
+
+  .stack,
+  .links,
+  .related ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .stack {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.8rem;
+    font-family: var(--font-mono);
+    font-size: var(--fs-sm);
+    color: var(--ink-faded);
+  }
+
+  .stack li::before {
+    content: '#';
+    color: var(--stamp);
+    margin-right: 0.2rem;
+  }
+
+  .links {
+    display: grid;
+    gap: 0.45rem;
+  }
+
+  .prose {
+    margin-top: var(--s3);
+  }
+
+  .prose :global(p),
+  .prose :global(ul),
+  .prose :global(ol),
+  .prose :global(pre),
+  .prose :global(blockquote) {
+    margin-block: 1.1em;
+  }
+
+  .prose :global(h2),
+  .prose :global(h3) {
+    margin-top: 1.7em;
+  }
+
+  .related li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: baseline;
+    gap: 0.5rem var(--s1);
+    padding-block: 0.45rem;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .related li:last-child {
+    border-bottom: 0;
+  }
+
+  .related time {
+    color: var(--pencil);
+    font-size: var(--fs-xs);
+    white-space: nowrap;
+  }
+
+  .fallback {
+    color: var(--stamp);
+    font-size: var(--fs-xs);
+    white-space: nowrap;
+  }
+
+  @media (max-width: 42rem) {
+    .content {
+      padding: var(--s1);
+    }
+
+    h1 {
+      font-size: var(--fs-h1);
+    }
+
+    .facts {
+      grid-template-columns: 1fr;
+    }
+
+    .related li {
+      grid-template-columns: 1fr auto;
+    }
+
+    .related li time {
+      grid-column: 2;
+      grid-row: 1;
+    }
+
+    .related .fallback {
+      grid-column: 1;
+      grid-row: 2;
+    }
+  }
+</style>

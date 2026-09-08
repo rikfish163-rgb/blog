@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "generatedOn": "2026-09-08",
+  "writing": {
+    "available": true,
+    "publishedCount": 1,
+    "days": [
+      {
+        "date": "2026-08-22",
+        "count": 1
+      }
+    ]
+  },
+  "github": {
+    "available": false,
+    "days": []
+  },
+  "editorTime": {
+    "available": false,
+    "totalMinutes": 0
+  },
+  "visits": {
+    "available": false,
+    "days": [],
+    "totalViews": 0,
+    "totalUniques": 0
+  }
+}

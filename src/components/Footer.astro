@@ -1,0 +1,84 @@
+---
+/**
+ * 页脚。
+ *
+ * 结尾放一枚署名印，像在笔记本最后一页盖章 —— 这是全站第二处、也是最后一处
+ * 出现毛笔字的地方。RSS 放在这里而不是头部：它是给少数人用的，不该占主导航。
+ */
+import { WORDMARK, SITE_NAME, SOCIAL, type Locale } from '../site.config';
+import { useT } from '../i18n/ui';
+import type { Lang } from '../lib/posts';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const t = useT(lang as Locale);
+const year = 2026;
+---
+
+<footer class="site-footer">
+  <div class="inner">
+    <span class="sign" aria-hidden="true">{WORDMARK}</span>
+
+    <div class="meta">
+      <p class="line mono">{SITE_NAME} · {year}</p>
+      <p class="links">
+        <a href={`/${lang}/rss.xml`}>RSS</a>
+        <span class="sep" aria-hidden="true">·</span>
+        <a href={SOCIAL.github} rel="me noopener">GitHub</a>
+        <span class="sep" aria-hidden="true">·</span>
+        <a href={`/${lang}/about/`}>{t('nav.about')}</a>
+      </p>
+    </div>
+  </div>
+</footer>
+
+<style>
+  .site-footer {
+    margin-top: var(--s6);
+    padding-block: var(--s2);
+    border-top: 1px solid var(--rule);
+  }
+
+  .inner {
+    max-width: var(--page-max);
+    margin-inline: auto;
+    padding-inline: var(--s1);
+    display: flex;
+    align-items: baseline;
+    gap: var(--s1);
+  }
+
+  .sign {
+    font-family: var(--font-wordmark);
+    font-size: 1.4rem;
+    line-height: 1;
+    color: var(--ink-faded);
+  }
+
+  .meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  .line {
+    font-size: var(--fs-xs);
+    color: var(--pencil);
+  }
+
+  .links {
+    font-size: var(--fs-sm);
+    color: var(--ink-faded);
+  }
+
+  .links a {
+    color: inherit;
+  }
+
+  .sep {
+    margin-inline: 0.4rem;
+    color: var(--pencil-light);
+  }
+</style>

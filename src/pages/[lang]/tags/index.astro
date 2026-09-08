@@ -1,0 +1,110 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { langPaths, assertLang, postsFor } from '../../../lib/content';
+import { useT } from '../../../i18n/ui';
+import { collectTags } from '../../../lib/posts';
+import type { Locale } from '../../../site.config';
+
+export function getStaticPaths() {
+  return langPaths();
+}
+
+const lang = assertLang(Astro.params.lang);
+const t = useT(lang as Locale);
+const posts = await postsFor(lang);
+
+// collectTags 已按篇数倒序、同数按钉死的 zh-Hans-CN collator 排序
+const tags = collectTags(posts);
+
+// 字号按篇数轻微区分。刻意只分三档 —— 真正的标签云（每个标签一个字号）
+// 会让页面看起来像 2008 年的博客侧栏。
+const max = tags[0]?.count ?? 1;
+const tier = (n: number) => (n === max && max > 1 ? 'lg' : n > 1 ? 'md' : 'sm');
+---
+
+<BaseLayout lang={lang} title={t('nav.tags')} current="tags">
+  <main id="main" class="page">
+    <div class="sheet">
+      <aside class="margin">
+        <p class="count mono">{tags.length}</p>
+      </aside>
+
+      <div class="content">
+        <h1 class="title">{t('nav.tags')}</h1>
+
+        {
+          tags.length === 0 ? (
+            <p class="empty">{t('home.empty')}</p>
+          ) : (
+            <ul class="cloud" data-reveal>
+              {tags.map((tg) => (
+                <li>
+                  <a href={`/${lang}/tags/${encodeURIComponent(tg.tag)}/`} class:list={['tag', tier(tg.count)]}>
+                    {tg.tag}
+                    <span class="n mono">{tg.count}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )
+        }
+      </div>
+    </div>
+  </main>
+</BaseLayout>
+
+<style>
+  .title {
+    font-size: var(--fs-h1);
+    padding-block: var(--s1) var(--s2);
+  }
+
+  .count,
+  .empty {
+    color: var(--pencil);
+  }
+
+  .cloud {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem 0.9rem;
+  }
+
+  /* 标签做成虚线框，像手写便签上圈出来的词 */
+  .tag {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.35rem;
+    padding: 0.25rem 0.6rem;
+    border: 1px dashed var(--pencil-light);
+    border-radius: var(--radius);
+    color: var(--ink);
+    text-decoration: none;
+    transition:
+      border-color var(--dur-fast) var(--ease),
+      color var(--dur-fast) var(--ease);
+  }
+
+  .tag:hover {
+    border-color: var(--stamp);
+    border-style: solid;
+  }
+
+  .n {
+    font-size: var(--fs-xs);
+    color: var(--pencil);
+  }
+
+  .sm {
+    font-size: var(--fs-sm);
+  }
+  .md {
+    font-size: var(--fs-base);
+  }
+  .lg {
+    font-size: var(--fs-lg);
+  }
+</style>

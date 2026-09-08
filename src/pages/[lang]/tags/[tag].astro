@@ -1,0 +1,82 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import PostList from '../../../components/PostList.astro';
+import { allPosts, assertLang } from '../../../lib/content';
+import { useT } from '../../../i18n/ui';
+import { collectTags, forLang, LANGS } from '../../../lib/posts';
+import type { Locale } from '../../../site.config';
+
+/**
+ * 每种语言 × 每个标签一个页面。
+ * 标签本身不翻译（"ROS" 就是 "ROS"），但两种语言下同一标签的文章集合不同 ——
+ * 因为回退项在各自语言里都会出现。
+ */
+export async function getStaticPaths() {
+  const posts = await allPosts();
+  const out = [];
+  for (const lang of LANGS) {
+    const mine = forLang(posts, lang);
+    // collectTags 已排除回退项，所以英文标签页不会出现中文标签
+    for (const { tag } of collectTags(mine)) {
+      out.push({
+        params: { lang, tag },
+        props: {
+          tag,
+          // 同样排除回退项：保证「标签页列出的篇数」与标签云上的数字一致，
+          // 否则点进去看到的条数和外面标的不一样。
+          posts: mine.filter((p) => !p.isFallback && p.entry.data.tags.includes(tag)),
+        },
+      });
+    }
+  }
+  return out;
+}
+
+const lang = assertLang(Astro.params.lang);
+const { tag, posts } = Astro.props;
+const t = useT(lang as Locale);
+---
+
+<BaseLayout lang={lang} title={tag} current="tags">
+  <main id="main" class="page">
+    <div class="sheet">
+      <aside class="margin">
+        <p class="count mono">{t('archive.count', { n: posts.length })}</p>
+      </aside>
+
+      <div class="content">
+        <p class="eyebrow">{t('nav.tags')}</p>
+        <h1 class="title">{tag}</h1>
+
+        <div data-reveal>
+          <PostList lang={lang} posts={posts} />
+        </div>
+
+        <p class="back">
+          <a href={`/${lang}/tags/`}>← {t('nav.tags')}</a>
+        </p>
+      </div>
+    </div>
+  </main>
+</BaseLayout>
+
+<style>
+  .title {
+    font-size: var(--fs-h1);
+    padding-block: 0.2rem var(--s2);
+  }
+
+  .count {
+    color: var(--pencil);
+  }
+
+  .back {
+    margin-top: var(--s2);
+    font-size: var(--fs-sm);
+    color: var(--ink-faded);
+  }
+
+  .back a {
+    color: inherit;
+  }
+</style>

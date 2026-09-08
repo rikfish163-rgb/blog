@@ -1,0 +1,70 @@
+---
+interface Props {
+  label: string;
+  value: string;
+  note?: string;
+  status?: 'available' | 'disabled';
+}
+
+const { label, value, note, status = 'available' } = Astro.props;
+---
+
+<div class="observation-row" data-status={status}>
+  <dt class="observation-label">{label}</dt>
+  <dd class="observation-value">
+    <span>{value}</span>
+    {note && <small class="observation-note">{note}</small>}
+  </dd>
+</div>
+
+<style>
+  .observation-row {
+    align-items: baseline;
+    border-bottom: 1px solid var(--rule);
+    display: grid;
+    gap: var(--s1);
+    grid-template-columns: minmax(8rem, 1fr) minmax(0, 2fr);
+    padding-block: 0.65rem;
+  }
+
+  .observation-row:first-child {
+    border-top: 1px solid var(--rule);
+  }
+
+  .observation-label {
+    color: var(--pencil);
+    font-size: var(--fs-sm);
+  }
+
+  .observation-value {
+    color: var(--ink-strong);
+    font-family: var(--font-mono);
+    font-size: var(--fs-sm);
+    margin: 0;
+    text-align: right;
+  }
+
+  .observation-note {
+    color: var(--pencil);
+    display: block;
+    font-family: inherit;
+    font-size: var(--fs-xs);
+    margin-top: 0.25rem;
+  }
+
+  [data-status='disabled'] .observation-value {
+    color: var(--pencil);
+    font-family: inherit;
+  }
+
+  @media (max-width: 36rem) {
+    .observation-row {
+      gap: 0.25rem;
+      grid-template-columns: 1fr;
+    }
+
+    .observation-value {
+      text-align: left;
+    }
+  }
+</style>

@@ -1,0 +1,92 @@
+---
+/**
+ * 主题切换。
+ *
+ * 按钮本身不含状态渲染逻辑 —— 图标靠 CSS 跟随 html[data-theme]，
+ * 这样 SSR 输出与客户端状态不会打架（否则会闪一下错误的图标）。
+ */
+import { useT } from '../i18n/ui';
+import type { Locale } from '../site.config';
+
+interface Props {
+  lang: Locale;
+}
+const { lang } = Astro.props;
+const t = useT(lang);
+---
+
+<button type="button" class="theme-toggle" data-theme-toggle aria-label={t('theme.toggle')}>
+  {/* 太阳与月亮叠在一起，靠 CSS 决定谁可见 */}
+  <svg class="icon icon--sun" viewBox="0 0 20 20" aria-hidden="true">
+    <circle cx="10" cy="10" r="3.6" />
+    <g stroke-linecap="round">
+      <path d="M10 1.6V3.4M10 16.6V18.4M1.6 10H3.4M16.6 10H18.4" />
+      <path d="M4.1 4.1L5.4 5.4M14.6 14.6L15.9 15.9M15.9 4.1L14.6 5.4M5.4 14.6L4.1 15.9" />
+    </g>
+  </svg>
+  <svg class="icon icon--moon" viewBox="0 0 20 20" aria-hidden="true">
+    <path d="M12.6 2.6a7.6 7.6 0 1 0 4.8 9.7 6 6 0 0 1-4.8-9.7Z" />
+  </svg>
+</button>
+
+<style>
+  .theme-toggle {
+    display: grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    background: none;
+    border: none;
+    border-radius: var(--radius);
+    color: var(--ink-faded);
+    transition: color var(--dur-fast) var(--ease);
+  }
+
+  .theme-toggle:hover {
+    color: var(--ink);
+  }
+
+  .icon {
+    grid-area: 1 / 1;
+    width: 1.15rem;
+    height: 1.15rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+  }
+
+  .icon--moon {
+    fill: currentColor;
+    stroke: none;
+  }
+
+  /* 亮色下显示月亮（点它进入暗色），暗色下显示太阳。
+     用 :global 因为 data-theme 在 <html> 上，不在本组件作用域内。 */
+  :global(html[data-theme='light']) .icon--sun,
+  :global(html[data-theme='dark']) .icon--moon {
+    display: none;
+  }
+</style>
+
+<script>
+  // document 级委托 + 全局守卫：天然跨 SPA 导航存活，不必每次 page-load 重绑。
+  if (!(window as any).__themeToggle) {
+    (window as any).__themeToggle = true;
+
+    document.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement | null)?.closest('[data-theme-toggle]');
+      if (!btn) return;
+
+      const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+      document.documentElement.dataset.theme = next;
+      document.documentElement.dataset.ecTheme = next === 'dark' ? 'github-dark' : 'github-light';
+
+      try {
+        localStorage.setItem('theme', next);
+      } catch {
+        // 隐私模式下写不进去。当前这一页仍然切换成功，只是不持久化。
+      }
+    });
+  }
+</script>

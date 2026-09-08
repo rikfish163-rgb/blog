@@ -1,0 +1,228 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { assertLang, langPaths } from '../../../lib/content';
+import { projectsFor } from '../../../lib/site-content';
+import type { Lang } from '../../../lib/posts';
+
+export function getStaticPaths() {
+  return langPaths();
+}
+
+const lang = assertLang(Astro.params.lang);
+const projects = await projectsFor(lang);
+const title = lang === 'zh' ? '项目' : 'Projects';
+const intro =
+  lang === 'zh'
+    ? '把问题、取舍和结果放在同一张纸上。'
+    : 'Problems, trade-offs, and results on the same sheet.';
+const empty = lang === 'zh' ? '还没有公开项目。' : 'No public projects yet.';
+const onlyLabel = (entryLang: Lang) => {
+  if (entryLang === 'zh') return lang === 'zh' ? '仅中文' : 'Chinese only';
+  return lang === 'zh' ? '仅英文' : 'English only';
+};
+---
+
+<BaseLayout lang={lang} title={title}>
+  <main id="main" class="page">
+    <div class="sheet sheet--ruled">
+      <aside class="margin" aria-label={lang === 'zh' ? '项目数量' : 'Project count'}>
+        <p class="count mono">{String(projects.length).padStart(2, '0')}</p>
+        <p class="mono">{lang === 'zh' ? '项目' : 'items'}</p>
+      </aside>
+
+      <div class="content paper-surface">
+        <header class="heading">
+          <p class="eyebrow">{lang === 'zh' ? '工作记录' : 'WORK LOG'}</p>
+          <h1>{title}</h1>
+          <p class="intro">{intro}</p>
+        </header>
+
+        {
+          projects.length === 0 ? (
+            <p class="empty" role="status">{empty}</p>
+          ) : (
+            <ul class="project-list">
+              {projects.map((project, index) => {
+                const data = project.entry.data;
+                return (
+                  <li class="project-item" data-reveal>
+                    <article aria-labelledby={`project-${index}-title`}>
+                      {data.cover && <img class="cover" src={data.cover} alt="" loading="lazy" />}
+                      <div class="project-body">
+                        <div class="project-topline">
+                          <p class="eyebrow mono">{data.period}</p>
+                          {project.isFallback && (
+                            <span class="fallback" lang={project.entryLang === 'zh' ? 'zh-CN' : 'en'}>
+                              {onlyLabel(project.entryLang)}
+                            </span>
+                          )}
+                        </div>
+                        <h2 id={`project-${index}-title`}><a href={project.href}>{data.title}</a></h2>
+                        <p class="summary">{data.summary}</p>
+                        <dl class="meta">
+                          <div><dt>{lang === 'zh' ? '角色' : 'Role'}</dt><dd>{data.role}</dd></div>
+                          <div><dt>{lang === 'zh' ? '状态' : 'Status'}</dt><dd>{data.status}</dd></div>
+                        </dl>
+                        {data.stack.length > 0 && (
+                          <ul class="stack" aria-label={lang === 'zh' ? '技术栈' : 'Stack'}>
+                            {data.stack.map((item) => <li>{item}</li>)}
+                          </ul>
+                        )}
+                      </div>
+                    </article>
+                  </li>
+                );
+              })}
+            </ul>
+          )
+        }
+      </div>
+    </div>
+  </main>
+</BaseLayout>
+
+<style>
+  .content {
+    padding: var(--s2);
+  }
+
+  .heading {
+    padding-bottom: var(--s2);
+    border-bottom: 1px solid var(--rule);
+  }
+
+  h1 {
+    margin-block: 0.35rem 0;
+    font-size: var(--fs-h1);
+  }
+
+  .intro,
+  .empty {
+    color: var(--ink-faded);
+  }
+
+  .intro {
+    max-width: 38ch;
+  }
+
+  .count {
+    color: var(--stamp);
+    font-size: var(--fs-lg);
+  }
+
+  .project-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .project-item {
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .project-item:last-child {
+    border-bottom: 0;
+  }
+
+  article {
+    display: grid;
+    grid-template-columns: minmax(0, 8rem) minmax(0, 1fr);
+    gap: var(--s1);
+    padding-block: var(--s2);
+  }
+
+  .cover {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    border: 1px solid var(--rule);
+    filter: saturate(0.82);
+  }
+
+  .project-body {
+    min-width: 0;
+  }
+
+  .project-topline {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--s1);
+  }
+
+  h2 {
+    margin: 0.3rem 0 0.45rem;
+    font-size: var(--fs-h2);
+  }
+
+  h2 a {
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.18em;
+  }
+
+  .summary {
+    margin: 0;
+  }
+
+  .fallback {
+    flex: none;
+    color: var(--stamp);
+    border-bottom: 1px solid currentColor;
+    font-size: var(--fs-xs);
+    letter-spacing: 0.02em;
+  }
+
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem var(--s2);
+    margin: var(--s1) 0 0;
+    font-size: var(--fs-sm);
+    color: var(--ink-faded);
+  }
+
+  .meta div {
+    display: flex;
+    gap: 0.45rem;
+  }
+
+  .meta dt {
+    color: var(--pencil);
+  }
+
+  .meta dd {
+    margin: 0;
+  }
+
+  .stack {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.75rem;
+    list-style: none;
+    margin: var(--s1) 0 0;
+    padding: 0;
+    color: var(--pencil);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+  }
+
+  .stack li::before {
+    content: '#';
+    color: var(--stamp);
+    margin-right: 0.2rem;
+  }
+
+  @media (max-width: 34rem) {
+    .content {
+      padding: var(--s1);
+    }
+
+    article {
+      grid-template-columns: 1fr;
+    }
+
+    .cover {
+      max-width: 12rem;
+    }
+  }
+</style>

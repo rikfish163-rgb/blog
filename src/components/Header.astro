@@ -1,0 +1,159 @@
+---
+/**
+ * 站头。
+ *
+ * 首页不重复显示站名 —— 那里的毛笔「泰生」就是站名本身，
+ * 头部再来一次是冗余。所以 isHome 时只留导航。
+ */
+import ReadingSettings from './ReadingSettings.astro';
+import LangSwitch from './LangSwitch.astro';
+import { WORDMARK, type Locale } from '../site.config';
+import { useT } from '../i18n/ui';
+import type { Lang } from '../lib/posts';
+
+interface Props {
+  lang: Lang;
+  /** 当前页所属栏目，用于高亮 */
+  current?: 'posts' | 'archive' | 'tags' | 'about' | 'search' | 'account';
+  isHome?: boolean;
+  targetHasTranslation?: boolean;
+}
+
+const { lang, current, isHome = false, targetHasTranslation } = Astro.props;
+const t = useT(lang as Locale);
+const authAiVisible = import.meta.env.DEV || import.meta.env.PUBLIC_ENABLE_AUTH_AI === 'true';
+
+const nav = [
+  { key: 'posts', href: `/${lang}/posts/`, label: t('nav.posts') },
+  { key: 'archive', href: `/${lang}/archive/`, label: t('nav.archive') },
+  { key: 'tags', href: `/${lang}/tags/`, label: t('nav.tags') },
+  { key: 'about', href: `/${lang}/about/`, label: t('nav.about') },
+] as const;
+---
+
+<header class="site-header">
+  <div class="inner">
+    {
+      isHome ? (
+        <span class="spacer" />
+      ) : (
+        <a class="wordmark" href={`/${lang}/`} aria-label={WORDMARK}>
+          {WORDMARK}
+        </a>
+      )
+    }
+
+    <nav class="nav" aria-label={lang === 'zh' ? '主导航' : 'Main'}>
+      {
+        nav.map((item) => (
+          <a
+            href={item.href}
+            class:list={['nav-link', { 'is-current': current === item.key }]}
+            aria-current={current === item.key ? 'page' : undefined}
+          >
+            {item.label}
+          </a>
+        ))
+      }
+
+      <a
+        href={`/${lang}/search/`}
+        class:list={['nav-link', { 'is-current': current === 'search' }]}
+        aria-current={current === 'search' ? 'page' : undefined}
+      >
+        {t('nav.search')}
+      </a>
+
+      {
+        authAiVisible && (
+          <a
+            href={`/${lang}/account/`}
+            class:list={['nav-link', { 'is-current': current === 'account' }]}
+            aria-current={current === 'account' ? 'page' : undefined}
+          >
+            {t('nav.account')}
+          </a>
+        )
+      }
+
+      <span class="divider" aria-hidden="true"></span>
+      <LangSwitch lang={lang} targetHasTranslation={targetHasTranslation} />
+      <ReadingSettings lang={lang} />
+    </nav>
+  </div>
+</header>
+
+<style>
+  .site-header {
+    /* 不做 sticky：这是一本笔记本，页眉跟着纸一起走才对。
+       而且固定页眉会一直压在渐变背景上，需要额外的不透明底，得不偿失。 */
+    padding-block: var(--s1);
+  }
+
+  .inner {
+    max-width: var(--page-max);
+    margin-inline: auto;
+    padding-inline: var(--s1);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--s1);
+  }
+
+  .wordmark {
+    font-family: var(--font-wordmark);
+    font-size: 1.6rem;
+    line-height: 1;
+    color: var(--ink-strong);
+    text-decoration: none;
+  }
+
+  .spacer {
+    /* 首页没有站名，用空元素占位保持导航靠右 */
+    display: block;
+  }
+
+  .nav {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    flex-wrap: wrap;
+  }
+
+  .nav-link {
+    font-size: var(--fs-sm);
+    color: var(--ink-faded);
+    text-decoration: none;
+    padding: 0.15rem 0;
+    /* 当前栏目用下方一道墨线标记，不用背景块 —— 与纸感一致 */
+    border-bottom: 1.5px solid transparent;
+    transition:
+      color var(--dur-fast) var(--ease),
+      border-color var(--dur-fast) var(--ease);
+  }
+
+  .nav-link:hover {
+    color: var(--ink);
+  }
+
+  .nav-link.is-current {
+    color: var(--ink-strong);
+    border-bottom-color: var(--stamp);
+  }
+
+  .divider {
+    width: 1px;
+    height: 0.9rem;
+    background: var(--pencil-light);
+  }
+
+  @media (max-width: 32rem) {
+    .inner {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    .nav {
+      gap: 0.7rem;
+    }
+  }
+</style>

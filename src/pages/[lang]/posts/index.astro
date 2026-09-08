@@ -1,0 +1,53 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import PostList from '../../../components/PostList.astro';
+import { langPaths, assertLang, postsFor } from '../../../lib/content';
+import { useT } from '../../../i18n/ui';
+import type { Locale } from '../../../site.config';
+
+export function getStaticPaths() {
+  return langPaths();
+}
+
+const lang = assertLang(Astro.params.lang);
+const t = useT(lang as Locale);
+const posts = await postsFor(lang);
+---
+
+<BaseLayout lang={lang} title={t('nav.posts')} current="posts">
+  <main id="main" class="page">
+    <div class="sheet">
+      <aside class="margin">
+        <p class="count mono">{t('archive.count', { n: posts.length })}</p>
+      </aside>
+
+      <div class="content">
+        <h1 class="title">{t('nav.posts')}</h1>
+        {
+          posts.length === 0 ? (
+            <p class="empty">{t('home.empty')}</p>
+          ) : (
+            <div data-reveal>
+              <PostList lang={lang} posts={posts} />
+            </div>
+          )
+        }
+      </div>
+    </div>
+  </main>
+</BaseLayout>
+
+<style>
+  .title {
+    font-size: var(--fs-h1);
+    padding-block: var(--s1) var(--s2);
+  }
+
+  .count {
+    color: var(--pencil);
+  }
+
+  .empty {
+    color: var(--pencil);
+  }
+</style>

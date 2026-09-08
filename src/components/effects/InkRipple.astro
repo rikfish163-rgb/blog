@@ -1,0 +1,182 @@
+---
+/**
+ * 墨滴入水涟漪。
+ *
+ * 点击处一团墨扩散并淡出（~620ms），同色系、低透明度，不抢注意力 ——
+ * 这是唯一在长文正文里也不违和的点击特效。
+ *
+ * 工程纪律：
+ *   - 空闲时不跑 requestAnimationFrame，一滴都没有就停循环
+ *   - 监听挂在 document 上 + window 级全局守卫，天然跨 SPA 导航存活
+ *   - prefers-reduced-motion 下整个特效不注册（连监听都不挂）
+ */
+---
+
+<canvas class="ink-ripple" data-ink-ripple aria-hidden="true"></canvas>
+
+<script>
+  interface Drop {
+    x: number;
+    y: number;
+    /** 起始时刻，performance.now() */
+    t0: number;
+    /** 这一滴的最大半径，带随机使每次不完全一样 */
+    maxR: number;
+    /** 墨团的不规则偏移，让扩散不是完美圆形 */
+    lobes: { dx: number; dy: number; r: number }[];
+  }
+
+  const DURATION = 620;
+  const PEAK_ALPHA = 0.16;
+
+  function init() {
+    // 打包后的 module script 只执行一次，但用全局守卫更保险：
+    // 开发时的 HMR 会重复执行本文件。
+    if ((window as any).__inkRipple) return;
+
+    // 尊重"减少动态效果"：完全不注册，而不是注册了再判断
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    (window as any).__inkRipple = true;
+
+    let canvas: HTMLCanvasElement | null = null;
+    let ctx: CanvasRenderingContext2D | null = null;
+    let dpr = 1;
+    const drops: Drop[] = [];
+    let raf = 0;
+
+    /**
+     * 取画布。SPA 导航会换掉 <body>，旧 canvas 被移出文档，
+     * 所以每次都检查 isConnected，失联就重新查询。
+     */
+    function acquire(): boolean {
+      if (canvas?.isConnected && ctx) return true;
+      canvas = document.querySelector<HTMLCanvasElement>('[data-ink-ripple]');
+      if (!canvas) return false;
+      ctx = canvas.getContext('2d');
+      if (!ctx) return false;
+      resize();
+      return true;
+    }
+
+    function resize() {
+      if (!canvas || !ctx) return;
+      dpr = Math.min(window.devicePixelRatio || 1, 2); // 封顶 2，3x 屏上收益递减而成本翻倍
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      canvas.width = Math.floor(w * dpr);
+      canvas.height = Math.floor(h * dpr);
+      canvas.style.width = w + 'px';
+      canvas.style.height = h + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    /** 从 CSS 变量读墨色，这样暗色模式自动跟随 */
+    function inkRGB(): string {
+      const v = getComputedStyle(document.documentElement).getPropertyValue('--ripple-rgb').trim();
+      return v || '31 42 55';
+    }
+
+    function easeOut(t: number): number {
+      return 1 - Math.pow(1 - t, 3);
+    }
+
+    function frame(now: number) {
+      raf = 0;
+      if (!canvas || !ctx) return;
+
+      ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+      const rgb = inkRGB();
+
+      // 倒序遍历，过期的直接摘掉
+      for (let i = drops.length - 1; i >= 0; i--) {
+        const d = drops[i]!;
+        const age = (now - d.t0) / DURATION;
+        if (age >= 1) {
+          drops.splice(i, 1);
+          continue;
+        }
+
+        const spread = easeOut(age);
+        // 淡出比扩散快一点，这样收尾干净，不会留一圈边
+        const alpha = PEAK_ALPHA * (1 - age) * (1 - age);
+
+        for (const lobe of d.lobes) {
+          const r = Math.max(0.1, d.maxR * spread * lobe.r);
+          const cx = d.x + lobe.dx * spread;
+          const cy = d.y + lobe.dy * spread;
+          const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+          // 中心稍实、边缘化开，才像墨在水里而不是一个半透明圆
+          g.addColorStop(0, `rgba(${rgb} / ${alpha})`);
+          g.addColorStop(0.55, `rgba(${rgb} / ${alpha * 0.5})`);
+          g.addColorStop(1, `rgba(${rgb} / 0)`);
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // 还有活着的墨滴才继续下一帧；否则彻底停下，空闲时零开销
+      if (drops.length > 0) raf = requestAnimationFrame(frame);
+    }
+
+    function kick() {
+      if (!raf && drops.length > 0) raf = requestAnimationFrame(frame);
+    }
+
+    function spawn(x: number, y: number) {
+      if (!acquire()) return;
+
+      // 同时存在的墨滴设上限：连续快速点击不该把帧率拖下来
+      if (drops.length >= 5) drops.shift();
+
+      const base = 46 + Math.random() * 22;
+      const lobes: Drop['lobes'] = [{ dx: 0, dy: 0, r: 1 }];
+      // 3 个偏心小瓣，制造不规则边缘
+      for (let i = 0; i < 3; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const dist = base * (0.12 + Math.random() * 0.18);
+        lobes.push({
+          dx: Math.cos(a) * dist,
+          dy: Math.sin(a) * dist,
+          r: 0.5 + Math.random() * 0.35,
+        });
+      }
+
+      drops.push({ x, y, t0: performance.now(), maxR: base, lobes });
+      kick();
+    }
+
+    document.addEventListener(
+      'pointerdown',
+      (e) => {
+        // 只响应主键。右键菜单和中键滚动不该冒墨
+        if (e.button !== 0) return;
+        // 文本选择时不冒墨：拖选文字的起点也是 pointerdown，那时冒墨很干扰
+        if (e.detail > 1) return;
+        spawn(e.clientX, e.clientY);
+      },
+      { passive: true },
+    );
+
+    window.addEventListener('resize', () => {
+      // 尺寸变了就重建画布；正在跑的墨滴坐标失效，直接清掉更干净
+      drops.length = 0;
+      if (canvas?.isConnected) resize();
+    });
+
+    // 页面被隐藏时清空，回来时不要突然闪一堆残留
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        drops.length = 0;
+        if (raf) {
+          cancelAnimationFrame(raf);
+          raf = 0;
+        }
+      }
+    });
+  }
+
+  init();
+</script>

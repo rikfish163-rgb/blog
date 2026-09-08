@@ -1,0 +1,310 @@
+---
+import { render } from 'astro:content';
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { allPosts, assertLang } from '../../../lib/content';
+import { useT } from '../../../i18n/ui';
+import { readingTime } from '../../../lib/reading-time';
+import { fullDate, isoDate } from '../../../lib/format';
+import { adjacent, hasRealTranslation, otherLang, withoutFallback } from '../../../lib/posts';
+import type { Locale } from '../../../site.config';
+import Giscus from '../../../components/Giscus.astro';
+/**
+ * 双语文章详情路由只为真实存在且已审核的语言版本生成页面。
+ * 单语文章会出现在另一语言的列表中，但链接直接指向原文，不制造假译文 URL。
+ */
+export async function getStaticPaths() {
+  const posts = withoutFallback(await allPosts());
+  return posts.map((p) => ({
+    params: { lang: p.lang, slug: p.slug },
+    props: {
+      post: p,
+      // 页码用「这一篇在本语言序列里的位置」，让实验本隐喻落到真实数据上
+      all: posts.filter((x) => x.lang === p.lang),
+      // 另一种语言下是否有真译文（而非回退），供 LangSwitch 如实提示
+      targetHasTranslation: hasRealTranslation(posts, p.slug, otherLang(p.lang)),
+    },
+  }));
+}
+
+const lang = assertLang(Astro.params.lang);
+const { post, all, targetHasTranslation } = Astro.props;
+const t = useT(lang as Locale);
+
+const { prev, next } = adjacent(all, post.slug);
+
+const { Content, headings } = await render(post.entry);
+const { minutes } = readingTime(post.entry.body ?? '');
+
+// 「第 N / M 页」：倒序列表里下标越小越新，所以页码从后往前数才符合直觉
+const idx = all.findIndex((x) => x.slug === post.slug);
+const pageNo = all.length - idx;
+const pageTotal = all.length;
+
+const d = post.entry.data;
+const dateStr = fullDate(d.pubDate);
+
+const pagefindAttrs = { 'data-pagefind-body': true };
+---
+
+<BaseLayout
+  lang={lang}
+  title={d.title}
+  description={d.description}
+  math={d.math}
+  ogType="article"
+  current="posts"
+  targetHasTranslation={targetHasTranslation}
+>
+  <main id="main" class="page">
+    <article class="sheet sheet--ruled" data-kind={d.kind} data-article>
+      <aside class="margin">
+        <span class="seal"><time datetime={isoDate(d.pubDate)}>{dateStr}</time></span>
+        <p class="page-no">{t('post.page', { n: pageNo, total: pageTotal })}</p>
+
+        {/* 铅笔质感的阅读进度：只动 transform: scaleY，滚动时不触发重排 */}
+        <div class="reading-progress" aria-hidden="true">
+          <div class="reading-progress__bar" data-progress-bar></div>
+        </div>
+
+        <p
+          class="remaining"
+          data-remaining
+          data-total-minutes={minutes}
+          data-tpl={t('post.remaining', { n: '{n}' })}
+        >
+          {t('post.readingTime', { n: minutes })}
+        </p>
+
+        {/* 当前章节名由滚动监听填入；初始为空，没有章节的短文就一直是空 */}
+        <p class="current-section" data-current-section></p>
+
+        <p class="kind">{t(`kind.${d.kind}` as const)}</p>
+      </aside>
+
+      <div class="content" {...pagefindAttrs}>
+
+        <header class="head" data-reveal>
+          <h1 transition:name={`title-${post.slug}`}>{d.title}</h1>
+          <p class="desc">{d.description}</p>
+        </header>
+
+        {
+          headings.length > 2 && (
+            <nav class="toc" aria-label={t('post.toc')}>
+              <p class="eyebrow">{t('post.toc')}</p>
+              <ul>
+                {headings
+                  .filter((h) => h.depth === 2)
+                  .map((h) => (
+                    <li>
+                      <a href={`#${h.slug}`}>{h.text}</a>
+                    </li>
+                  ))}
+              </ul>
+            </nav>
+          )
+        }
+
+        <div class="prose">
+          <Content />
+        </div>
+
+        {/* 读到底得有去处。两侧各一个，缺一侧就只显示另一侧 */}
+        {
+          (prev || next) && (
+            <nav class="adjacent" aria-label={lang === 'zh' ? '相邻文章' : 'Adjacent posts'}>
+              {prev ? (
+                <a class="adj adj--prev" href={`/${lang}/posts/${prev.slug}/`}>
+                  <span class="adj-label eyebrow">{t('post.prev')}</span>
+                  <span class="adj-title">{prev.entry.data.title}</span>
+                </a>
+              ) : (
+                <span />
+              )}
+              {next && (
+                <a class="adj adj--next" href={`/${lang}/posts/${next.slug}/`}>
+                  <span class="adj-label eyebrow">{t('post.next')}</span>
+                  <span class="adj-title">{next.entry.data.title}</span>
+                </a>
+              )}
+            </nav>
+          )
+        }
+
+        <Giscus lang={lang as Locale} heading={lang === 'zh' ? '文章评论' : 'Comments'} />
+      </div>
+    </article>
+  </main>
+</BaseLayout>
+
+<style>
+  .margin > * {
+    margin: 0;
+  }
+  .margin .page-no,
+  .margin .remaining,
+  .margin .current-section,
+  .margin .kind {
+    margin-top: 0.5rem;
+  }
+
+  /* 章节名是唯一允许折行的批注 —— 标题本来就可能很长。
+     其余批注由 global.css 的 nowrap 保证单行。 */
+  .margin .current-section {
+    color: var(--pencil-light);
+    line-height: 1.4;
+    white-space: normal;
+    overflow-wrap: break-word;
+  }
+
+  /* 阅读进度条在页边靠右，与其它批注右对齐 */
+  .margin .reading-progress {
+    margin-top: 0.75rem;
+  }
+
+  .head {
+    padding-block: var(--s2);
+  }
+
+  .head h1 {
+    font-size: var(--fs-display);
+  }
+
+  .desc {
+    margin-top: var(--s1);
+    color: var(--ink-faded);
+    font-size: var(--fs-lg);
+  }
+
+  /* 回退提示。语气坦白，不假装有译文，也不做成刺眼的警告条 */
+  .fallback-notice {
+    margin: 0 0 var(--s2);
+    padding: 0.6rem 0.9rem;
+    font-size: var(--fs-sm);
+    color: var(--ink-faded);
+    background: var(--stamp-soft);
+    border-left: 2px solid var(--stamp);
+    border-radius: 0 var(--radius) var(--radius) 0;
+  }
+
+  .toc {
+    margin-bottom: var(--s2);
+    padding: var(--s1);
+    border: 1px dashed var(--pencil-light);
+    border-radius: var(--radius);
+  }
+  .toc ul {
+    list-style: none;
+    margin: 0.5rem 0 0;
+    padding: 0;
+    font-size: var(--fs-sm);
+  }
+  .toc li {
+    padding-block: 0.15rem;
+  }
+
+  /* 正文排版。用 :global 因为内容由 <Content /> 注入，作用域样式碰不到 */
+  .prose :global(h2) {
+    font-size: var(--fs-h2);
+    margin-block: var(--s3) var(--s1);
+  }
+  .prose :global(h3) {
+    font-size: var(--fs-h3);
+    margin-block: var(--s2) 0.5rem;
+  }
+  .prose :global(p) {
+    margin-block: var(--s1);
+  }
+  .prose :global(ul),
+  .prose :global(ol) {
+    margin-block: var(--s1);
+    padding-left: 1.4em;
+  }
+  .prose :global(li) {
+    margin-block: 0.3rem;
+  }
+  .prose :global(blockquote) {
+    margin: var(--s2) 0;
+    padding-left: var(--s1);
+    border-left: 2px solid var(--pencil-light);
+    color: var(--ink-faded);
+  }
+  .prose :global(hr) {
+    border: none;
+    border-top: 1px solid var(--rule);
+    margin-block: var(--s3);
+  }
+  .prose :global(table) {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--fs-sm);
+    margin-block: var(--s2);
+  }
+  .prose :global(th),
+  .prose :global(td) {
+    text-align: left;
+    padding: 0.45rem 0.6rem;
+    border-bottom: 1px solid var(--rule);
+  }
+  .prose :global(th) {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    text-transform: uppercase;
+    letter-spacing: var(--ls-wide);
+    color: var(--pencil);
+  }
+  /* 行内代码。用等宽 + 淡边框，不用色块，避免打断中文阅读节奏 */
+  .prose :global(:not(pre) > code) {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    padding: 0.1em 0.35em;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    background: var(--paper-raised);
+  }
+  .prose :global(.expressive-code) {
+    margin-block: var(--s2);
+  }
+
+  /* 上一篇 / 下一篇。两栏，next 靠右对齐，像翻页方向 */
+  .adjacent {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--s1);
+    margin-top: var(--s4);
+    padding-top: var(--s2);
+    border-top: 1px solid var(--rule);
+  }
+
+  .adj {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    text-decoration: none;
+    color: var(--ink-faded);
+  }
+
+  .adj--next {
+    text-align: right;
+  }
+
+  .adj-title {
+    font-size: var(--fs-sm);
+    color: var(--ink);
+    line-height: 1.5;
+  }
+
+  .adj:hover .adj-title {
+    text-decoration: underline;
+    text-decoration-color: var(--stamp);
+  }
+
+  @media (max-width: 32rem) {
+    .adjacent {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .adj--next {
+      text-align: left;
+    }
+  }
+</style>

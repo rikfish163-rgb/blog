@@ -1,0 +1,109 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import HomeTabs from '../../components/HomeTabs.astro';
+import { langPaths, assertLang, postsFor } from '../../lib/content';
+import { projectsFor } from '../../lib/site-content';
+import { useT } from '../../i18n/ui';
+import { WORDMARK, AUTHOR, TAGLINE, FEATURED_COUNT, RECENT_COUNT, type Locale } from '../../site.config';
+import { featured, recent } from '../../lib/posts';
+import { sealDate, isoDate } from '../../lib/format';
+
+export function getStaticPaths() {
+  return langPaths();
+}
+
+const lang = assertLang(Astro.params.lang);
+const t = useT(lang as Locale);
+const posts = await postsFor(lang);
+const pick = featured(posts, lang, FEATURED_COUNT);
+const projects = await projectsFor(lang);
+
+// 日期在这里就拼成完整字符串。模板里做 {月}.{日} 拼接会因换行产生空白，
+// 渲染成 "08. 31"。
+const latest = recent(posts, lang, RECENT_COUNT).map((p) => ({
+  ...p,
+  seal: sealDate(p.entry.data.pubDate),
+  iso: isoDate(p.entry.data.pubDate),
+}));
+
+// "第 N 页"里的 N 就是文章总数，让实验本隐喻落到真实数据上
+const pageNo = posts.length;
+const year = 2026;
+---
+
+<BaseLayout lang={lang} isHome>
+  <main id="main" class="page">
+    <header class="hero">
+      <h1 class="wordmark">{WORDMARK}</h1>
+      <svg class="stroke" viewBox="0 0 200 14" aria-hidden="true" focusable="false">
+        {/*
+          填充路径而不是 stroke：SVG 的 stroke-width 是均匀的，画不出毛笔那种
+          两端收锋、中段饱满的变化。上下两条曲线围成一个带状，中段最厚约 2.8px，
+          左右收到 1px 以内，末端略微上挑，像笔提起来。
+        */}
+        <path
+          d="M3 9.2 C 22 7.0, 48 5.9, 74 6.2 C 104 6.6, 146 5.2, 196 5.9
+             C 197.6 6.1, 197.4 7.2, 195.8 7.4
+             C 146 6.9, 106 8.4, 75 8.9 C 48 9.3, 22 10.2, 3.4 10.1
+             C 2.2 10.0, 2.1 9.3, 3 9.2 Z"
+        />
+      </svg>
+
+      <p class="lede">{TAGLINE[lang as Locale]}</p>
+
+      <p class="meta mono">
+        {AUTHOR.location[lang as Locale]} · {year} · {t('post.page', { n: pageNo, total: pageNo })}
+      </p>
+    </header>
+
+    <HomeTabs lang={lang} posts={posts} projects={projects} featuredPosts={pick} recentPosts={latest} />
+  </main>
+</BaseLayout>
+
+<style>
+  .hero {
+    padding-block: var(--s4) var(--s3);
+    max-width: var(--measure);
+    margin-inline: auto;
+  }
+
+  .wordmark {
+    font-family: var(--font-wordmark);
+    font-size: var(--fs-wordmark);
+    font-weight: 400;
+    line-height: 1;
+    margin: 0;
+    letter-spacing: 0.04em;
+  }
+
+  /* 一道墨线。SVG 而不是 border，因为要有手写的粗细变化 */
+  .stroke {
+    width: 8rem;
+    height: 0.75rem;
+    margin-top: 0.35rem;
+    overflow: visible;
+  }
+  .stroke path {
+    fill: none;
+    stroke: var(--ink);
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    opacity: 0.55;
+  }
+
+  /* 正文的 1.9 行距对 20px 引导语太松，会把两句话撑得毫无关系。
+     收到 1.5 并放宽 max-width，让"偶尔写失败。"自然落到第二行末尾。 */
+  .lede {
+    margin-top: var(--s1);
+    font-size: var(--fs-lg);
+    line-height: 1.5;
+    max-width: 34ch;
+  }
+
+  .meta {
+    margin-top: var(--s1);
+    font-size: var(--fs-sm);
+    color: var(--pencil);
+  }
+
+</style>

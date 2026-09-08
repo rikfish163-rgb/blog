@@ -1,0 +1,75 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import Giscus from '../../../components/Giscus.astro';
+import { assertLang, langPaths } from '../../../lib/content';
+
+export function getStaticPaths() {
+  return langPaths();
+}
+
+const lang = assertLang(Astro.params.lang);
+const title = lang === 'zh' ? '留言簿' : 'Guestbook';
+const eyebrow = lang === 'zh' ? '留下几句' : 'LEAVE A NOTE';
+const body =
+  lang === 'zh'
+    ? '留言簿计划使用 GitHub Discussions。评论区会在配置完成后按需加载；现在不会加载第三方脚本，也不会假装评论已经可用。'
+    : 'The guestbook is planned with GitHub Discussions. A comments area will load lazily after it is configured; no third-party script is loaded here yet.';
+const note =
+  lang === 'zh'
+    ? '评论使用 GitHub 账号。配置完成后，这里会出现留言入口。'
+    : 'Comments will use a GitHub account. The guestbook entry point will appear after configuration.';
+---
+
+<BaseLayout lang={lang} title={title}>
+  <main id="main" class="page">
+    <div class="sheet sheet--ruled">
+      <aside class="margin" aria-label={lang === 'zh' ? '留言簿状态' : 'Guestbook status'}>
+        <p class="mono">{lang === 'zh' ? '稍后' : 'LATER'}</p>
+      </aside>
+
+      <div class="content paper-surface">
+        <p class="eyebrow">{eyebrow}</p>
+        <h1>{title}</h1>
+        <p class="lead">{body}</p>
+        <p class="note">{note}</p>
+
+        <Giscus lang={lang} heading={lang === 'zh' ? '留言区' : 'Guestbook comments'} />
+      </div>
+    </div>
+  </main>
+</BaseLayout>
+
+<style>
+  .content {
+    padding: var(--s3) var(--s2);
+  }
+
+  h1 {
+    margin: 0.35rem 0 var(--s1);
+    font-size: var(--fs-display);
+  }
+
+  .lead {
+    max-width: 54ch;
+    margin: 0;
+    font-size: var(--fs-lg);
+  }
+
+  .note {
+    max-width: 54ch;
+    margin: var(--s2) 0 0;
+    padding-top: var(--s1);
+    border-top: 1px solid var(--rule);
+    color: var(--ink-faded);
+  }
+
+  @media (max-width: 42rem) {
+    .content {
+      padding: var(--s2) var(--s1);
+    }
+
+    h1 {
+      font-size: var(--fs-h1);
+    }
+  }
+</style>

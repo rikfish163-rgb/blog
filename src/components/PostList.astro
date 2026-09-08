@@ -1,0 +1,157 @@
+---
+/**
+ * 文章列表。文章列表页 / 标签页 / 搜索无关的各处共用一份，
+ * 避免同一种行样式在三个页面各写一遍然后慢慢长歪。
+ */
+import { sealDate, isoDate } from '../lib/format';
+import { useT } from '../i18n/ui';
+import type { Locale } from '../site.config';
+import type { Lang, Resolved } from '../lib/posts';
+import type { Entry } from '../lib/content';
+
+interface Props {
+  lang: Lang;
+  posts: Resolved<Entry>[];
+  /** 是否显示每篇的一句话描述。归档页不显示，列表页显示 */
+  showDesc?: boolean;
+}
+
+const { lang, posts, showDesc = true } = Astro.props;
+const t = useT(lang as Locale);
+
+const rows = posts.map((p) => ({
+  slug: p.slug,
+  href: `/${p.entryLang}/posts/${p.slug}/`,
+  tagLang: p.entryLang,
+  title: p.entry.data.title,
+  desc: p.entry.data.description,
+  kind: p.entry.data.kind,
+  tags: p.entry.data.tags,
+  seal: sealDate(p.entry.data.pubDate),
+  iso: isoDate(p.entry.data.pubDate),
+  // 回退项如实标注，并直接链接原文而不是制造假翻译详情页
+  isFallback: p.isFallback,
+}));
+---
+
+<ul class="post-list">
+  {
+    rows.map((r) => (
+      <li class="row">
+        <div class="head">
+          <a class="title" href={r.href}>
+            {r.title}
+          </a>
+          <time class="date mono" datetime={r.iso}>
+            {r.seal}
+          </time>
+        </div>
+
+        {showDesc && <p class="desc">{r.desc}</p>}
+
+        <p class="meta">
+          <span class="kind">{t(`kind.${r.kind}` as const)}</span>
+          {r.tags.length > 0 && (
+            <>
+              <span class="sep" aria-hidden="true">·</span>
+              <span class="tags">
+                {r.tags.map((tag, i) => (
+                  <>
+                    {i > 0 && <span class="comma" aria-hidden="true">、</span>}
+                    <a href={`/${r.tagLang}/tags/${encodeURIComponent(tag)}/`}>{tag}</a>
+                  </>
+                ))}
+              </span>
+            </>
+          )}
+          {r.isFallback && (
+            <>
+              <span class="sep" aria-hidden="true">·</span>
+              <span class="fallback">{lang === 'zh' ? '英文原文' : 'Chinese original'}</span>
+            </>
+          )}
+        </p>
+      </li>
+    ))
+  }
+</ul>
+
+<style>
+  .post-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .row {
+    padding-block: var(--s1);
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .row:last-child {
+    border-bottom: none;
+  }
+
+  .head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--s1);
+  }
+
+  .title {
+    font-size: var(--fs-h3);
+    font-weight: 600;
+    color: var(--ink-strong);
+    text-decoration: none;
+    line-height: var(--lh-heading);
+  }
+
+  .title:hover {
+    text-decoration: underline;
+    text-decoration-color: var(--stamp);
+  }
+
+  /* 日期用铅笔灰。朱砂印章只留给文章页那唯一一个日期，
+     列表里出现多个红块会盖过标题。 */
+  .date {
+    font-size: var(--fs-sm);
+    color: var(--pencil);
+    flex: none;
+  }
+
+  .desc {
+    margin-top: 0.35rem;
+    font-size: var(--fs-sm);
+    color: var(--ink-faded);
+    line-height: 1.65;
+  }
+
+  .meta {
+    margin-top: 0.4rem;
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--pencil);
+  }
+
+  .meta a {
+    color: inherit;
+    text-decoration-color: var(--pencil-light);
+  }
+
+  .meta a:hover {
+    color: var(--ink-faded);
+  }
+
+  .sep {
+    margin-inline: 0.45rem;
+  }
+
+  .comma {
+    margin-inline: 0.1rem;
+  }
+
+  .fallback {
+    color: var(--stamp);
+  }
+</style>
