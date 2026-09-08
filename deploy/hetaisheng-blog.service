@@ -1,0 +1,23 @@
+[Unit]
+Description=Hetaisheng personal blog
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/srv/hetaisheng-blog/current
+EnvironmentFile=/srv/hetaisheng-blog/shared/.env
+ExecStart=/srv/hetaisheng-blog/runtime/node/bin/node dist/server/entry.mjs
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=15
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/srv/hetaisheng-blog/shared
+
+[Install]
+WantedBy=multi-user.target
